@@ -1597,9 +1597,6 @@
       <h1 class="card-title" id="result-title"></h1>
       <div class="recap" id="result-recap"></div>
       <p class="card-text" id="result-text"></p>
-      <div class="card-actions">
-        <button type="button" class="btn" id="next-question"></button>
-      </div>
     </div>
   </main>
 
@@ -1710,7 +1707,7 @@
     <div class="card">
       <!-- hiérarchie : ce qu'on regarde d'abord, puis quel quiz, puis son état -->
       <div class="final-head">
-        <h1 class="final-heading" id="final-heading">Classement final</h1>
+        <h1 class="final-heading">Classement final</h1>
         <p class="final-quiz" id="final-quiz-title" hidden></p>
         <p class="final-state" id="final-title">Partie terminée</p>
       </div>
@@ -1719,7 +1716,6 @@
       <p class="quip" id="final-quip" hidden></p>
       <div class="board" id="final-board" hidden></div>
       <div class="card-actions">
-        <button type="button" class="btn" id="replay">Rejouer</button>
         <button type="button" class="btn btn--ghost" id="back-home">Accueil</button>
       </div>
     </div>
@@ -2046,25 +2042,15 @@
     renderEditor();
     show('editor');
   });
-  document.getElementById('mode-player').addEventListener('click', function () {
-    if (cloud.db && liveState && liveState.phase !== 'ended') {
-      joining = true;          // on rejoindra la partie en cours après le nom
-    } else {
-      joining = false;         // pas de partie en ligne : repli solo
-    }
-    askName();
-  });
+  document.getElementById('mode-player').addEventListener('click', askName);
 
   /* ================= Partie en ligne (Firebase Auth + Firestore) =================
-     La page doit rester jouable seule : tant que `cloud.db` est null, tout le
-     reste du script fonctionne exactement comme avant, en solo. */
+     Toute partie passe par la base : sans connexion, on ne peut ni organiser ni jouer. */
 
   // lien à partager pour rejoindre : la page elle-même, où qu'elle soit hébergée
   var PAGE_URL = location.href.split('#')[0].split('?')[0];
 
-  // À remplir après création du projet Firebase (console Firebase > Paramètres du
-  // projet > Vos applications > config SDK). Tant que apiKey vaut ce texte, l'app
-  // saute Firebase et reste en mode solo, comme hors artifact.
+  // config SDK du projet Firebase (console Firebase > Paramètres du projet > Vos applications)
   var FIREBASE_CONFIG = {
     apiKey: 'AIzaSyCYTVFFV3ud9bRL28_HR2KTfMQ7qaU5e5Q',
     authDomain: 'main-levee.firebaseapp.com',
@@ -2085,14 +2071,25 @@
   var cloudTitle = '';
   var cloudDemo = true;
   var isHost = false;       // cet onglet pilote la partie
-  var joining = false;      // l'écran du nom doit inscrire à la partie en ligne
+  var joining = false;      // le joueur a donné son nom et attend une partie à rejoindre
   var myGameId = '';
   var myChoice = null;
   var shownIndex = -1;      // question déjà rendue, pour ignorer les répétitions
   var shownPhase = '';
 
-  if (typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey !== 'REMPLACE_MOI') {
+  // servie en local, la page parle aux émulateurs Firebase et jamais à la base réelle
+  var USE_EMULATORS = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+
+  if (typeof firebase !== 'undefined') {
     firebase.initializeApp(FIREBASE_CONFIG);
+    var authReady = Promise.resolve();
+    if (USE_EMULATORS) {
+      firebase.auth().useEmulator('http://127.0.0.1:9099', { disableWarnings: true });
+      firebase.firestore().useEmulator('127.0.0.1', 8080);
+      // un joueur par onglet : sans ça, tous les onglets partagent le même compte anonyme
+      authReady = firebase.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
+      console.info('Main Levée : émulateurs Firebase (auth :9099, firestore :8080)');
+    }
     // pas de compte organisateur : tout visiteur authentifié anonymement peut
     // ouvrir un salon, comme choisi pour ce déploiement (groupe d'amis de confiance)
     firebase.auth().onAuthStateChanged(function (user) {
@@ -2103,7 +2100,9 @@
       cloud.canWrite = true;
       watchGame();
     });
-    firebase.auth().signInAnonymously().catch(function () { cloud.db = null; });
+    authReady.then(function () {
+      return firebase.auth().signInAnonymously();
+    }).catch(function () { cloud.db = null; });
   }
 
   // une seule souscription par chemin, ouverte au démarrage et gardée
@@ -2154,7 +2153,7 @@
   }
 
   function onDbError() {
-    // erreur terminale : on coupe proprement et la page reste jouable en solo
+    // erreur terminale : sans base, aucune partie ne peut continuer
     cloud.db = null;
     if (views.lobby.hidden === false || views.host.hidden === false || views.wait.hidden === false) {
       show('home');
@@ -2223,7 +2222,7 @@
         });
       })
       .catch(function () {
-        lobbyMsg.textContent = 'La partie n’a pas pu être ouverte. Tu peux jouer en solo depuis l’accueil.';
+        lobbyMsg.textContent = 'La partie n’a pas pu être ouverte. Vérifie ta connexion et réessaie.';
       });
   }
 
@@ -2567,6 +2566,17 @@
     return true;
   }
 
+  // après le nom : on rejoint la partie ouverte, ou on attend la prochaine
+  function tryJoin() {
+    joining = true;
+    if (cloud.uid && liveState && liveState.phase !== 'ended') {
+      joinGame();
+      return;
+    }
+    showWaiting('Aucune partie ouverte',
+      'Reste sur cette page : tu rejoindras la partie dès que l’organisateur ouvrira le salon.');
+  }
+
   function writeMyProgress() {
     if (!cloud.uid) return;
     cloud.db.doc('players/' + cloud.uid).set({
@@ -2600,6 +2610,12 @@
       return;
     }
 
+    // le joueur attend une partie : il y entre dès que l'organisateur en ouvre une
+    if (!myGameId && joining && liveState.phase !== 'ended' && !views.wait.hidden) {
+      joinGame();
+      return;
+    }
+
     if (!myGameId || myGameId !== liveState.gameId) return; // partie d'un autre round
 
     useCloudQuiz();
@@ -2623,7 +2639,7 @@
     } else if (liveState.phase === 'reveal' && shownPhase !== 'reveal-' + stepKey) {
       shownPhase = 'reveal-' + stepKey;
       current = liveState.index;
-      revealResult(myChoice, true);
+      revealResult(myChoice);
     } else if (liveState.phase === 'ended' && shownPhase !== 'ended') {
       shownPhase = 'ended';
       showScore();
@@ -2932,13 +2948,11 @@
     quiz = draft;          // c'est le brouillon qui part en partie
     quizTitle = draftTitle;
     quizDemo = draftDemo;
-    // en ligne, l'organisateur ouvre un salon ; sinon il joue en solo comme avant
-    if (cloud.db && cloud.canEdit) {
-      openLobby();
-    } else {
-      joining = false;
-      askName();
+    if (!cloud.db || !cloud.canEdit) {
+      editorMsg.textContent = 'Connexion à la base pas encore établie. Réessaie dans un instant.';
+      return;
     }
+    openLobby();
   });
 
   /* ---------------- Mode participant : identité ---------------- */
@@ -2997,11 +3011,7 @@
       localStorage.setItem(ICON_KEY, String(playerIcon));
     } catch (e) { /* stockage indisponible : le choix vaut pour la session */ }
 
-    if (joining && liveState) {
-      joinGame();
-    } else {
-      startGame();
-    }
+    tryJoin();
   });
 
   /* ---------------- Mode participant : partie ---------------- */
@@ -3073,7 +3083,6 @@
   var resultTitle = document.getElementById('result-title');
   var resultText = document.getElementById('result-text');
   var resultRecap = document.getElementById('result-recap');
-  var nextButton = document.getElementById('next-question');
 
   /* ---------------- Minuteur ---------------- */
   /* Temps de lecture : la question reste seule à l'écran quelques secondes, puis les
@@ -3127,7 +3136,7 @@
   function startTimer(startedAt, onEnd) {
     stopTimer();
     timerEls.forEach(function (el) { el.classList.remove('timer--reading'); });
-    onTimerEnd = onEnd || function () { revealResult(null); };
+    onTimerEnd = onEnd;
     var begin = startedAt || Date.now();
     var elapsed = Math.floor((Date.now() - begin) / 1000);
     remaining = Math.max(duration - elapsed, 1);
@@ -3217,23 +3226,6 @@
     badgeRight.appendChild(document.createTextNode(' ' + player + ' · ' + score + ' pts'));
   }
 
-  function startGame() {
-    // sans stockage, le brouillon en mémoire est la seule version à jour
-    if (canStore) {
-      draft = load();
-      duration = loadDuration();
-      draftTitle = loadTitle();
-      draftDemo = loadDemoFlag();
-    }
-    quiz = draft;
-    if (!myGameId) quizTitle = draftTitle;   // en solo, c'est le titre du brouillon
-    current = 0;
-    score = 0;
-    rights = 0;
-    lastAward = 0;
-    renderQuestion();
-  }
-
   // clickable pour le joueur, simple affichage pour l'écran de suivi
   function answersHtml(item, clickable) {
     return item.a.map(function (answer, ai) {
@@ -3254,11 +3246,11 @@
   }
 
   function renderQuestion(startedAt, onEnd) {
-    var item = (myGameId && isDemo()) ? DEMO_QUESTION : quiz[current];
+    var item = isDemo() ? DEMO_QUESTION : quiz[current];
     questionText.textContent = item.q;
     questionCounter.textContent = questionCaption();
 
-    badgeLeft.textContent = (myGameId && isDemo())
+    badgeLeft.textContent = isDemo()
       ? 'Question test' : 'Question ' + (current + 1) + ' / ' + quiz.length;
     updateScoreBadge();
 
@@ -3278,27 +3270,22 @@
     stopTimer();
     var chosen = Number(button.dataset.index);
 
-    // en ligne, on enregistre et on attend que l'organisateur révèle
-    if (myGameId) {
-      myChoice = chosen;
+    // on enregistre et on attend que l'organisateur révèle
+    myChoice = chosen;
 
-      if (isDemo()) {
-        lastAward = 0;   // l'entraînement ne rapporte rien et ne coûte rien
-        writeMyProgress();
-        showWaiting('C’est exactement ça', 'Tu sais répondre. Le quiz démarre juste après.');
-        return;
-      }
-
-      var goodAnswer = (chosen === quiz[current].correct);
-      lastAward = goodAnswer ? speedPoints() : 0;
-      if (goodAnswer) rights += 1;
-      score += lastAward;
+    if (isDemo()) {
+      lastAward = 0;   // l'entraînement ne rapporte rien et ne coûte rien
       writeMyProgress();
-      showWaiting('Réponse envoyée', 'En attente des autres participants…');
+      showWaiting('C’est exactement ça', 'Tu sais répondre. Le quiz démarre juste après.');
       return;
     }
 
-    revealResult(chosen);
+    var goodAnswer = (chosen === quiz[current].correct);
+    lastAward = goodAnswer ? speedPoints() : 0;
+    if (goodAnswer) rights += 1;
+    score += lastAward;
+    writeMyProgress();
+    showWaiting('Réponse envoyée', 'En attente des autres participants…');
   });
 
   // les quatre options, avec la bonne réponse et celle du joueur mises en avant
@@ -3321,17 +3308,11 @@
   }
 
   // chosen vaut null quand le temps est écoulé sans réponse ;
-  // online = le score a déjà été compté à la réponse, l'organisateur pilote la suite
-  function revealResult(chosen, online) {
-    var demo = (online && isDemo());
+  // le score a déjà été compté à la réponse, l'organisateur pilote la suite
+  function revealResult(chosen) {
+    var demo = isDemo();
     var item = demo ? DEMO_QUESTION : quiz[current];
     var isCorrect = (chosen !== null && chosen === item.correct);
-
-    if (!online) {
-      lastAward = isCorrect ? speedPoints() : 0;
-      if (isCorrect) rights += 1;
-      score += lastAward;
-    }
 
     mark.innerHTML = isCorrect ? MARK_OK : MARK_KO;
 
@@ -3355,20 +3336,8 @@
     resultRecap.innerHTML = renderRecap(item, chosen);
 
     updateScoreBadge();
-    nextButton.hidden = !!online;   // en ligne, c'est l'organisateur qui enchaîne
-    nextButton.textContent = (current + 1 < quiz.length) ? 'Question suivante →' : 'Voir mon score →';
-
     show('result');
   }
-
-  nextButton.addEventListener('click', function () {
-    current += 1;
-    if (current < quiz.length) {
-      renderQuestion();
-    } else {
-      showScore();
-    }
-  });
 
   // félicitation du vainqueur, tirée une fois par partie
   var finalQuip = document.getElementById('final-quip');
@@ -3395,11 +3364,9 @@
   }
 
   function showScore() {
-    var max = quiz.length * POINTS;
     var title = document.getElementById('final-title');
     var big = document.getElementById('final-score');
     var text = document.getElementById('final-text');
-    var replayButton = document.getElementById('replay');
 
     var stopped = !!(liveState && liveState.stopped);
 
@@ -3408,51 +3375,37 @@
     finalQuizTitle.textContent = quizTitle;
     finalQuizTitle.hidden = !quizTitle;
 
-    // en solo il n'y a pas de classement : l'écran annonce ce qu'il montre vraiment
-    document.getElementById('final-heading').textContent =
-      (isHost || myGameId) ? 'Classement final' : 'Ton résultat';
-
     if (isHost) {
       // l'organisateur n'a pas joué : le classement occupe tout l'écran
       title.textContent = stopped ? 'Partie arrêtée' : 'Partie terminée';
       big.hidden = true;
       text.textContent = quiz.length + ' question' + (quiz.length > 1 ? 's' : '') + ' posée' +
         (quiz.length > 1 ? 's' : '') + '.';
-      replayButton.hidden = true;
       paintFinalQuip();
       renderBoard();
     } else {
-      title.textContent = (stopped && myGameId) ? 'Partie arrêtée par l’organisateur' : 'Partie terminée';
+      title.textContent = stopped ? 'Partie arrêtée par l’organisateur' : 'Partie terminée';
       big.hidden = false;
       big.classList.remove('big-score--text');
 
       var goodAnswers = '<strong>' + rights + '</strong> bonne' + (rights > 1 ? 's' : '') +
         ' réponse' + (rights > 1 ? 's' : '') + ' sur ' + quiz.length;
 
-      if (myGameId) {
-        // en partie, la place compte plus que le total de points
-        var others = currentPlayers();
-        var mine = others.filter(function (p) { return p.id === cloud.uid; })[0];
-        var myScore = mine ? mine.score : score;
-        var ahead = others.filter(function (p) { return p.score > myScore; }).length;
-        var tied = others.filter(function (p) {
-          return p.score === myScore && p.id !== cloud.uid;
-        }).length;
+      // la place compte plus que le total de points
+      var others = currentPlayers();
+      var mine = others.filter(function (p) { return p.id === cloud.uid; })[0];
+      var myScore = mine ? mine.score : score;
+      var ahead = others.filter(function (p) { return p.score > myScore; }).length;
+      var tied = others.filter(function (p) {
+        return p.score === myScore && p.id !== cloud.uid;
+      }).length;
 
-        big.textContent = rankLabel(ahead + 1);
-        text.innerHTML = 'sur ' + others.length + ' joueur' + (others.length > 1 ? 's' : '') +
-          (tied ? ', à égalité avec ' + tied + ' autre' + (tied > 1 ? 's' : '') : '') +
-          ' — ' + myScore + ' pts, ' + goodAnswers + '.';
-        paintFinalQuip();
-        renderBoard();
-      } else {
-        finalQuip.hidden = true;   // en solo, personne à féliciter
-        big.textContent = score + ' / ' + max + ' pts';
-        text.innerHTML = goodAnswers + '.';
-        document.getElementById('final-board').hidden = true;
-      }
-
-      replayButton.hidden = !!myGameId;   // en ligne, on ne rejoue pas seul dans son coin
+      big.textContent = rankLabel(ahead + 1);
+      text.innerHTML = 'sur ' + others.length + ' joueur' + (others.length > 1 ? 's' : '') +
+        (tied ? ', à égalité avec ' + tied + ' autre' + (tied > 1 ? 's' : '') : '') +
+        ' — ' + myScore + ' pts, ' + goodAnswers + '.';
+      paintFinalQuip();
+      renderBoard();
     }
 
     updateScoreBadge();
@@ -3460,7 +3413,6 @@
     badgeLeft.hidden = true;   // l'écran dit déjà que la partie est finie
   }
 
-  document.getElementById('replay').addEventListener('click', startGame);
   document.getElementById('back-home').addEventListener('click', function () {
     leaveGame();
     show('home');

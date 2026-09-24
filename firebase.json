@@ -6,11 +6,20 @@
       "firestore.rules",
       "**/.*",
       "**/node_modules/**",
+      "**/*.log",
       "DONNEES.md",
+      "EMULATEUR.md",
       "db-export/**"
     ]
   },
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "emulators": {
+    "singleProjectMode": true,
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "hosting": { "port": 5000 },
+    "ui": { "enabled": true, "port": 4000 }
   }
 }

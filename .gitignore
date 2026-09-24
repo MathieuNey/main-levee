@@ -1,2 +1,5 @@
 # Fichiers temporaires d'export de la base (instantanés locaux, pas la source du projet)
 db-export/
+
+# Journaux des émulateurs Firebase
+*-debug.log

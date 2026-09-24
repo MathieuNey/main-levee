@@ -12,13 +12,29 @@ Conséquences pratiques :
 - un seul projet Firebase pour toute l'appli, à créer une fois dans la console Firebase ;
 - les règles d'accès sont déclarées dans [`firestore.rules`](firestore.rules), à coller dans la
   console (ou déployer via `firebase deploy --only firestore:rules`) ;
-- tant que `FIREBASE_CONFIG.apiKey` vaut `'REMPLACE_MOI'`, l'app saute Firebase et retombe en mode
-  solo avec `localStorage`. Les données ci-dessous n'existent alors pas ;
+- toute partie passe par Firebase : sans connexion à la base, on ne peut ni organiser ni jouer.
+  `localStorage` ne garde que des préférences locales (brouillon de l'éditeur, nom, icône, thème) ;
 - **choix assumé : pas de compte organisateur.** N'importe quel visiteur authentifié anonymement
   (donc n'importe qui ouvrant la page) peut ouvrir un salon. Adapté à un usage entre personnes de
   confiance — voir `firestore.rules` pour durcir si besoin.
 
 Front hébergé sur GitHub Pages, base sur Firebase (projet Google Cloud séparé).
+
+## Tester en local, sans toucher à la base réelle
+
+Servie depuis `localhost` ou `127.0.0.1`, la page se branche d'elle-même sur les émulateurs
+Firebase (Auth sur 9099, Firestore sur 8080) au lieu du vrai projet. Il faut Java 21 ou plus. Pas à pas
+complet : [EMULATEUR.md](EMULATEUR.md).
+
+```bash
+npx firebase-tools emulators:start --only auth,firestore,hosting
+```
+
+- page : <http://localhost:5000>, interface des émulateurs : <http://localhost:4000> ;
+- les émulateurs appliquent `firestore.rules` : les tests vérifient aussi les règles ;
+- en local, chaque onglet a son propre compte anonyme : un onglet organisateur et plusieurs
+  onglets joueurs simulent une vraie partie. Recharger un onglet en fait un nouveau joueur ;
+- les données de l'émulateur disparaissent à l'arrêt.
 
 ## Modèle de données
 
