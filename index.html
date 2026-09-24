@@ -1,0 +1,3472 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Main Levée</title>
+<style>
+  :root {
+    /* papier clair, crayon noir */
+    --paper: #faf9f6;
+    --ink: #1a1a1a;
+    --ink-soft: #555555;
+    --ink-faint: #9a9a9a;
+    --grain: rgba(0, 0, 0, 0.014);
+    /* bords irréguliers façon tracé main levée */
+    --sketch-lg: 255px 15px 225px 15px / 15px 225px 15px 255px;
+    --sketch-sm: 18px 6px 14px 8px / 8px 16px 6px 18px;
+  }
+
+  /* thème sombre : ardoise et craie, mêmes tracés */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #17171a;
+      --ink: #f1eee7;
+      --ink-soft: #a9a49b;
+      --ink-faint: #6d6960;
+      --grain: rgba(255, 255, 255, 0.022);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #17171a;
+    --ink: #f1eee7;
+    --ink-soft: #a9a49b;
+    --ink-faint: #6d6960;
+    --grain: rgba(255, 255, 255, 0.022);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; min-height: 100%; }
+
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: var(--paper);
+    /* grain de papier très léger */
+    background-image:
+      repeating-linear-gradient(0deg, var(--grain) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, var(--grain) 0 1px, transparent 1px 3px);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  [hidden] { display: none !important; }
+
+  /* ---------- Barre du haut ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 24px 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 2px solid var(--ink);
+    border-radius: var(--sketch-sm);
+    padding: 6px 14px;
+    background: transparent;
+  }
+
+  .pill .avatar { width: 18px; height: 18px; }
+
+  /* liste des joueurs, déroulée au survol du badge de l'organisateur */
+  .badge-menu { position: relative; }
+
+  /* le badge n'est plus enfant direct de la barre : on lui rend son inclinaison */
+  .badge-menu .pill { transform: rotate(0.6deg); }
+
+  .badge-pop {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 40;
+    min-width: 210px;
+    max-width: min(300px, calc(100vw - 32px));
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    text-align: left;
+    color: var(--ink);
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: var(--sketch-sm);
+    box-shadow: 3px 4px 0 var(--ink);
+  }
+
+  .badge-menu[data-pop="on"]:hover .badge-pop,
+  .badge-menu[data-pop="on"]:focus-within .badge-pop { display: block; }
+
+  .badge-menu[data-pop="on"] .pill { cursor: default; }
+
+  .pop-title {
+    margin: 0 0 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .pop-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    border-top: 1.5px dashed var(--ink-faint);
+  }
+
+  .pop-row:first-of-type { border-top: none; }
+
+  .pop-name { flex: 1; overflow-wrap: anywhere; }
+
+  .pop-score {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink-soft);
+  }
+
+  .pop-empty {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .topbar .pill:first-child { transform: rotate(-0.8deg); }
+  .topbar .pill:last-child  { transform: rotate(0.6deg); }
+
+  /* ---------- Signature ---------- */
+  .signature {
+    position: fixed;
+    left: 16px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 20;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.25;
+    color: var(--ink-faint);
+    pointer-events: none;   /* purement décoratif : ne gêne aucun clic */
+  }
+
+  .signature-name {
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+
+  .signature-by {
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-style: italic;
+  }
+
+  /* ---------- Bascule clair / sombre ---------- */
+  .theme-toggle {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: inherit;
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 50% 47% 53% 50% / 50% 53% 47% 50%;
+    cursor: pointer;
+    transform: rotate(-2deg);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .theme-toggle:hover,
+  .theme-toggle:focus-visible {
+    outline: none;
+    box-shadow: 3px 4px 0 var(--ink);
+    transform: rotate(-2deg) translate(-2px, -2px);
+  }
+
+  .theme-toggle svg {
+    width: 23px;
+    height: 23px;
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ---------- Rappel du titre du quiz ---------- */
+  .quiz-caption {
+    margin: 2px 24px 0;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-style: italic;
+    letter-spacing: 0.02em;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- Interstitiel de lancement ---------- */
+  #view-intro {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .intro-eyebrow {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .intro-title {
+    margin: 0;
+    font-size: clamp(2rem, 7vw, 3.2rem);
+    font-weight: 800;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  /* ---------- Boutons génériques ---------- */
+  .btn {
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    color: inherit;
+    padding: 12px 26px;
+    border: 2.5px solid var(--ink);
+    border-radius: var(--sketch-sm);
+    background: transparent;
+    cursor: pointer;
+    transform: rotate(0.4deg);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    box-shadow: 3px 4px 0 var(--ink);
+    outline: none;
+    transform: rotate(0.4deg) translate(-2px, -2px);
+  }
+
+  .btn--small {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-width: 2px;
+  }
+
+  .btn--ghost { border-style: dashed; }
+
+  /* action principale : pleine, elle doit se voir avant tout le reste */
+  .btn--primary {
+    font-size: 1.15rem;
+    padding: 15px 34px;
+    color: var(--paper);
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .btn--primary:hover,
+  .btn--primary:focus-visible { box-shadow: 3px 4px 0 var(--ink-faint); }
+
+  /* outils : petits, avec un picto pour la lecture rapide */
+  .btn--icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .btn-icon {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ---------- Vues ---------- */
+  .view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 10px 24px 76px;   /* place pour la bascule de thème, en bas à droite */
+    max-width: 1000px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ---------- Accueil ---------- */
+  #view-home {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 30px;
+  }
+
+  .home-title {
+    margin: 0;
+    font-size: clamp(2rem, 7vw, 3.4rem);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  .home-sub {
+    margin: -14px 0 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .modes {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .mode {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 38px 26px;
+    font-family: inherit;
+    color: inherit;
+    text-align: center;
+    border: 3px solid var(--ink);
+    border-radius: var(--sketch-lg);
+    background: transparent;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .mode::after {
+    content: "";
+    position: absolute;
+    inset: 4px 3px 2px 5px;
+    border: 1.5px solid var(--ink);
+    border-radius: 225px 15px 255px 15px / 15px 255px 15px 225px;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .mode { transform: rotate(-0.5deg); }
+
+  .mode:hover, .mode:focus-visible {
+    outline: none;
+    transform: rotate(-0.5deg) translate(-3px, -3px);
+  }
+
+  /* action principale : pleine, comme « Lancer la partie » */
+  .mode--primary {
+    color: var(--paper);
+    background: var(--ink);
+  }
+
+  .mode--primary::after { opacity: 0.25; border-color: var(--paper); }
+
+  .mode--primary .mode-icon * { stroke: var(--paper); }
+
+  .mode--primary .mode-desc { color: var(--paper); opacity: 0.75; }
+
+  /* l'ombre encre serait invisible sur fond encre */
+  .mode--primary:hover, .mode--primary:focus-visible { box-shadow: 4px 5px 0 var(--ink-faint); }
+
+  .mode-icon { width: 64px; height: 64px; }
+
+  .mode-icon * {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .mode-name {
+    font-size: clamp(1.5rem, 5vw, 1.9rem);
+    font-weight: 800;
+  }
+
+  .mode-desc {
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    line-height: 1.45;
+  }
+
+  /* entrée organisateur : accessible, mais clairement secondaire */
+  .host-entry {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: -12px;
+  }
+
+  .host-entry-text {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- Question ---------- */
+  .question {
+    position: relative;
+    margin: 0;
+    padding: 34px 30px;
+    text-align: center;
+    font-size: clamp(1.45rem, 4vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1.3;
+    border: 3px solid var(--ink);
+    border-radius: var(--sketch-lg);
+    transform: rotate(-0.35deg);
+  }
+
+  /* second trait décalé = crayon repassé deux fois */
+  .question::after {
+    content: "";
+    position: absolute;
+    inset: 4px 3px 2px 5px;
+    border: 1.5px solid var(--ink);
+    border-radius: 225px 15px 255px 15px / 15px 255px 15px 225px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .timer {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    border: 3px solid var(--ink);
+    border-radius: 50% 48% 52% 50% / 50% 52% 48% 50%;
+    flex-shrink: 0;
+  }
+
+  /* temps de lecture : trait pointillé, on ne peut pas encore répondre */
+  .timer--reading {
+    border-style: dashed;
+    color: var(--ink-soft);
+  }
+
+  /* dernières secondes : le trait s'épaissit */
+  .timer--urgent {
+    border-width: 5px;
+    animation: tick 1s ease-in-out infinite;
+  }
+
+  @keyframes tick {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+
+  .timer::after {
+    content: "";
+    position: absolute;
+    inset: -5px -4px -3px -5px;
+    border: 1.5px solid var(--ink);
+    border-radius: 48% 52% 50% 50% / 52% 48% 50% 50%;
+    opacity: 0.35;
+  }
+
+  /* anneau de progression : il se vide en faisant le tour du cercle */
+  .timer-ring {
+    position: absolute;
+    inset: 3px;
+    width: auto;
+    height: auto;
+    transform: rotate(-90deg);   /* le tracé part du haut */
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .timer-arc {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-dasharray: 282.74;    /* circonférence pour r = 45 */
+    stroke-dashoffset: 0;
+  }
+
+  .timer--reading .timer-arc { stroke: var(--ink-faint); }
+
+  .timer-value { position: relative; }
+
+  .counter {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  /* ---------- Réponses ---------- */
+  .answers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .answer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 20px;
+    min-height: 116px;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    font-size: clamp(1rem, 2.1vw, 1.3rem);
+    font-weight: 600;
+    color: inherit;
+    border: 2.5px solid var(--ink);
+    border-radius: var(--sketch-sm);
+    background: transparent;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  /* hachures crayon, orientation différente par bloc */
+  .answer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .hatch--a::before {
+    background: repeating-linear-gradient(45deg, var(--ink-faint) 0 1px, transparent 1px 9px);
+  }
+  .hatch--b::before {
+    background: repeating-linear-gradient(-45deg, var(--ink-faint) 0 1px, transparent 1px 9px);
+  }
+  .hatch--c::before {
+    background:
+      repeating-linear-gradient(45deg, var(--ink-faint) 0 1px, transparent 1px 11px),
+      repeating-linear-gradient(-45deg, var(--ink-faint) 0 1px, transparent 1px 11px);
+  }
+  .hatch--d::before {
+    background: repeating-linear-gradient(90deg, var(--ink-faint) 0 1px, transparent 1px 10px);
+  }
+
+  .answer:nth-child(1) { transform: rotate(-0.5deg); }
+  .answer:nth-child(2) { transform: rotate(0.4deg); }
+  .answer:nth-child(3) { transform: rotate(0.5deg); }
+  .answer:nth-child(4) { transform: rotate(-0.4deg); }
+
+  .answer:nth-child(1):hover, .answer:nth-child(1):focus-visible { transform: rotate(-0.5deg) translate(-2px, -2px); }
+  .answer:nth-child(2):hover, .answer:nth-child(2):focus-visible { transform: rotate(0.4deg)  translate(-2px, -2px); }
+  .answer:nth-child(3):hover, .answer:nth-child(3):focus-visible { transform: rotate(0.5deg)  translate(-2px, -2px); }
+  .answer:nth-child(4):hover, .answer:nth-child(4):focus-visible { transform: rotate(-0.4deg) translate(-2px, -2px); }
+
+  .answer:hover, .answer:focus-visible { box-shadow: 3px 4px 0 var(--ink); outline: none; }
+  .answer:active { box-shadow: 1px 1px 0 var(--ink); }
+
+  /* écran de suivi : les options sont montrées, pas proposées */
+  .answers--static .answer {
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .answer .shape,
+  .answer .label { position: relative; } /* au-dessus des hachures */
+
+  .answer .label {
+    background: var(--paper);
+    padding: 2px 6px;
+  }
+
+  /* symboles de cartes : contour crayon, pas d'aplat */
+  .shape {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    overflow: visible;
+  }
+
+  .shape * {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  /* ---------- Répartition des réponses ---------- */
+  .bars {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    align-items: end;
+  }
+
+  .bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .bar-count {
+    font-size: 1.25rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bar-track {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+    height: 130px;
+  }
+
+  .bar-fill {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    border: 2.5px solid var(--ink);
+    border-radius: 10px 4px 8px 5px / 5px 9px 4px 10px;
+    transition: height 0.25s ease;
+  }
+
+  /* les hachures de la réponse, reprises dans sa barre */
+  .bar-fill::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+  }
+
+  .bar-fill--right { background: var(--ink); }
+  .bar-fill--right::before { opacity: 0.2; }
+
+  .bar-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ink-soft);   /* les mauvaises réponses restent en retrait */
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .bar-label .shape { width: 20px; height: 20px; }
+  .bar-label .shape * { stroke: currentColor; }
+
+  /* colonne de la bonne réponse : tout y est plus appuyé */
+  .bar-col--right .bar-label {
+    color: var(--ink);
+    font-weight: 800;
+  }
+
+  .bar-col--right .bar-count { font-size: 1.45rem; }
+
+  .bar-col .tag {
+    font-size: 0.66rem;
+    padding: 3px 8px;
+    line-height: 1.2;
+  }
+
+  .bar-col .tag-icon { width: 12px; height: 12px; }
+
+  /* place réservée sous les autres colonnes, pour aligner les barres entre elles */
+  .tag--ghost {
+    visibility: hidden;
+    border: none;
+    padding: 3px 8px;
+    font-size: 0.66rem;
+    line-height: 1.2;
+  }
+
+  .tag--ghost::before { content: "x"; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar-fill { transition: none; }
+  }
+
+  /* ---------- Interstitiel de résultat ---------- */
+  #view-name, #view-result, #view-score, #view-standings {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 44px 44px 38px;
+    max-width: 580px;
+    width: 100%;
+    border: 3px solid var(--ink);
+    border-radius: var(--sketch-lg);
+    transform: rotate(-0.4deg);
+  }
+
+  .card::after {
+    content: "";
+    position: absolute;
+    inset: 4px 3px 2px 5px;
+    border: 1.5px solid var(--ink);
+    border-radius: 225px 15px 255px 15px / 15px 255px 15px 225px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* gros pictogramme : coche ou croix, tracés au crayon */
+  .verdict-mark { width: 92px; height: 92px; }
+
+  .verdict-mark * {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .card-title {
+    margin: 0;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .card-text {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+
+  .card-text strong { color: var(--ink); }
+
+  /* récapitulatif des quatre options */
+  .recap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .recap-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;  /* étroit : les étiquettes passent sous le libellé */
+    gap: 8px 12px;
+    padding: 9px 14px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    border: 2px solid var(--ink-faint);
+    border-radius: var(--sketch-sm);
+  }
+
+  .recap-row .shape { width: 26px; height: 26px; }
+
+  /* les options ni cochées ni correctes restent en retrait */
+  .recap-row .shape * { stroke: var(--ink-soft); }
+
+  .recap-row--marked {
+    color: var(--ink);
+    font-weight: 700;
+    border-color: var(--ink);
+    border-width: 2.5px;
+  }
+
+  .recap-row--marked .shape * { stroke: var(--ink); }
+
+  .recap-label {
+    flex: 1 1 8ch;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding: 3px 9px;
+    border: 2px solid var(--ink);
+    border-radius: 12px 5px 10px 6px / 6px 11px 4px 12px;
+  }
+
+  .tag-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* la bonne réponse : pleine, c'est le fait établi */
+  .tag--right {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* le choix du joueur : au crayon, c'est une annotation */
+  .tag--mine {
+    border-style: dashed;
+    color: var(--ink);
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* champ « ton nom » */
+  .name-input {
+    font-family: inherit;
+    font-size: clamp(1.2rem, 4vw, 1.6rem);
+    font-weight: 700;
+    color: inherit;
+    text-align: center;
+    width: 100%;
+    max-width: 340px;
+    padding: 12px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2.5px dashed var(--ink-faint);
+  }
+
+  .name-input::placeholder { color: var(--ink-faint); font-weight: 600; }
+
+  .name-input:focus {
+    outline: none;
+    border-bottom: 2.5px solid var(--ink);
+  }
+
+  /* ---------- Avatars ---------- */
+  .avatar {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .avatar-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .avatar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    padding: 0;
+    color: var(--ink-soft);
+    background: transparent;
+    border: 2px solid var(--ink-faint);
+    border-radius: var(--sketch-sm);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .avatar-btn .avatar { width: 26px; height: 26px; }
+
+  .avatar-btn:hover,
+  .avatar-btn:focus-visible {
+    outline: none;
+    color: var(--ink);
+    border-color: var(--ink);
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 3px 0 var(--ink);
+  }
+
+  .avatar-btn[aria-checked="true"] {
+    color: var(--ink);
+    border-color: var(--ink);
+    border-width: 3px;
+    box-shadow: 2px 3px 0 var(--ink);
+  }
+
+  /* ---------- En-tête du classement final ---------- */
+  .final-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .final-heading {
+    margin: 0;
+    font-size: clamp(1.9rem, 6.5vw, 2.9rem);
+    font-weight: 800;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  .final-quiz {
+    margin: 0;
+    font-size: clamp(1.05rem, 3vw, 1.3rem);
+    font-weight: 700;
+    color: var(--ink-soft);
+    text-wrap: balance;
+  }
+
+  .final-state {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .big-score {
+    font-size: clamp(2.6rem, 9vw, 4rem);
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  /* variante texte : un titre, pas un chiffre */
+  .big-score--text {
+    font-size: clamp(1.7rem, 5.5vw, 2.5rem);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  /* ---------- Éditeur (organisateur) ---------- */
+  .editor-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .editor-tools {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .editor-title {
+    margin: 0;
+    font-size: clamp(1.5rem, 4vw, 2.1rem);
+    font-weight: 800;
+  }
+
+  .editor-hint {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  /* réglage global de la partie */
+  .setting {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-self: flex-start;
+    padding: 12px 18px;
+    border: 2.5px dashed var(--ink);
+    border-radius: var(--sketch-sm);
+    transform: rotate(-0.3deg);
+  }
+
+  .setting-label {
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .setting-input {
+    font-family: inherit;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: inherit;
+    width: 4.5rem;
+    padding: 4px 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .setting-input:focus {
+    outline: none;
+    border-bottom-width: 3px;
+  }
+
+  .setting-unit {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .setting--title { transform: rotate(0.25deg); }
+  .setting--demo { transform: rotate(-0.2deg); }
+
+  /* interrupteur : même case cochée que dans l'éditeur de réponses */
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+
+  .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+
+  .toggle input:checked + .opt-box::after { opacity: 1; }
+  .toggle input:focus-visible + .opt-box { box-shadow: 0 0 0 3px var(--ink-faint); }
+
+  .toggle .setting-label { cursor: pointer; }
+
+  .setting-input--text {
+    width: 100%;
+    max-width: 28ch;
+    text-align: left;
+    font-size: 1.15rem;
+  }
+
+  .setting-note {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    border-left: 2px dashed var(--ink-faint);
+    padding-left: 12px;
+  }
+
+  #q-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* les questions et leur bouton d'ajout forment un seul ensemble */
+  .questions-block {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .add-question {
+    width: 100%;
+    border-style: dashed;
+    border-width: 2px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    transform: rotate(0.15deg);
+  }
+
+  .add-question:hover,
+  .add-question:focus-visible {
+    color: var(--ink);
+    transform: rotate(0.15deg) translate(-2px, -2px);
+  }
+
+  .q-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 22px 24px;
+    border: 2.5px solid var(--ink);
+    border-radius: var(--sketch-sm);
+  }
+
+  .q-card:nth-child(odd)  { transform: rotate(-0.25deg); }
+  .q-card:nth-child(even) { transform: rotate(0.25deg); }
+
+  .q-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .q-num {
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .field {
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: inherit;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px dashed var(--ink-faint);
+  }
+
+  .field:focus {
+    outline: none;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .field--question {
+    font-size: clamp(1.1rem, 2.6vw, 1.35rem);
+    font-weight: 700;
+  }
+
+  .opt-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 2px solid var(--ink);
+    border-radius: var(--sketch-sm);
+  }
+
+  .opt .shape { width: 26px; height: 26px; }
+
+  .opt .field { border-bottom-color: transparent; padding: 6px 4px; }
+  .opt .field:focus { border-bottom-color: var(--ink); }
+
+  /* case « bonne réponse » */
+  .opt-correct {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--ink-soft);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .opt-correct input { position: absolute; opacity: 0; pointer-events: none; }
+
+  .opt-box {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--ink);
+    border-radius: 7px 3px 6px 4px / 4px 7px 3px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .opt-box::after {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--ink);
+    opacity: 0;
+  }
+
+  .opt-correct input:checked + .opt-box::after { opacity: 1; }
+  .opt-correct input:focus-visible + .opt-box { box-shadow: 0 0 0 3px var(--ink-faint); }
+
+  .editor-actions {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;   /* l'action principale se termine à droite */
+  }
+
+  /* le message reste à gauche, le bouton garde le bord droit */
+  .editor-actions .editor-msg { margin-right: auto; }
+
+  .editor-msg {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  /* ---------- Salon d'attente ---------- */
+  #view-lobby, #view-wait, #view-host {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .share {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .share-link {
+    flex: 1 1 220px;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: inherit;
+    padding: 10px 12px;
+    background: transparent;
+    border: 2px dashed var(--ink-faint);
+    border-radius: var(--sketch-sm);
+  }
+
+  .share-link:focus { outline: none; border-color: var(--ink); }
+
+  /* jauge de participants */
+  .joined {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .joined-count {
+    font-size: clamp(2.4rem, 8vw, 3.4rem);
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .joined-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border: 2px solid var(--ink);
+    border-radius: var(--sketch-sm);
+  }
+
+  .chip .avatar { width: 19px; height: 19px; }
+
+  .chip--me { border-style: dashed; }
+
+  .btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* ---------- Fenêtre de confirmation ---------- */
+  .modal {
+    max-width: 440px;
+    width: calc(100% - 32px);
+    padding: 28px 26px 24px;
+    color: var(--ink);
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: var(--sketch-lg);
+    transform: rotate(-0.4deg);
+  }
+
+  .modal::backdrop { background: rgba(20, 20, 20, 0.5); }
+
+  .modal-title {
+    margin: 0 0 12px;
+    font-size: clamp(1.25rem, 4vw, 1.6rem);
+    font-weight: 800;
+  }
+
+  .modal-text {
+    margin: 0 0 22px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+
+  /* petite remarque manuscrite en marge du classement */
+  .quip {
+    margin: 0;
+    padding: 8px 0 8px 14px;
+    align-self: stretch;
+    text-align: left;
+    font-size: 1rem;
+    font-weight: 600;
+    font-style: italic;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    border-left: 3px dashed var(--ink-faint);
+  }
+
+  /* ---------- Classement ---------- */
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .board-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 14px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    border: 2px solid var(--ink-faint);
+    border-radius: var(--sketch-sm);
+  }
+
+  .board-row--me {
+    border-color: var(--ink);
+    border-width: 2.5px;
+    font-weight: 800;
+  }
+
+  .board-rank {
+    font-size: 1.1rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    min-width: 1.6rem;
+  }
+
+  .board-name {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    overflow-wrap: anywhere;
+  }
+
+  .board-score {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .answer, .btn, .mode { transition: none; }
+    .timer--urgent { animation: none; }
+  }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 640px) {
+    .view { padding: 6px 14px 76px; gap: 16px; }
+    .question { padding: 24px 18px; }
+    .answers { grid-template-columns: 1fr; gap: 12px; }
+    .answer { min-height: 72px; padding: 14px 16px; }
+    .timer { width: 62px; height: 62px; font-size: 1.5rem; }
+    .topbar { padding: 14px 14px 4px; font-size: 0.78rem; }
+    .mode { padding: 28px 18px; }
+    .card { padding: 30px 20px 26px; gap: 16px; }
+    .verdict-mark { width: 70px; height: 70px; }
+    .opt-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Passer au thème sombre" title="Passer au thème sombre">
+    <svg viewBox="0 0 24 24" aria-hidden="true" id="theme-icon"></svg>
+  </button>
+
+  <p class="signature">
+    <span class="signature-name">Main Levée</span>
+    <span class="signature-by">claudé par Mathieu Ney</span>
+  </p>
+
+  <header class="topbar">
+    <button type="button" class="pill btn btn--small" id="home-link" hidden>&larr; Accueil</button>
+    <span class="pill" id="badge-left" hidden></span>
+    <div class="badge-menu" id="badge-menu" hidden>
+      <span class="pill" id="badge-right" tabindex="0" aria-describedby="badge-pop"></span>
+      <div class="badge-pop" id="badge-pop" role="group" aria-label="Joueurs de la partie"></div>
+    </div>
+  </header>
+
+  <!-- rappel discret du quiz en cours, pendant tout le parcours -->
+  <p class="quiz-caption" id="quiz-caption" hidden></p>
+
+  <!-- ===================== Accueil ===================== -->
+  <main class="view" id="view-home">
+    <h1 class="home-title">Main Levée</h1>
+    <p class="home-sub">Quiz interactif, réponses depuis ton mobile</p>
+
+    <!-- l'immense majorité des gens vient pour jouer : une seule action domine l'écran -->
+    <div class="modes">
+      <button type="button" class="mode mode--primary" id="mode-player">
+        <svg class="mode-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <!-- main levée : répondre -->
+          <circle cx="24" cy="14" r="7"/>
+          <path d="M10 40 C10 31 16 26 24 26 C32 26 38 31 38 40"/>
+        </svg>
+        <span class="mode-name">Participer au quiz</span>
+        <span class="mode-desc">Réponds aux questions et découvre ton score.</span>
+      </button>
+    </div>
+
+    <div class="host-entry">
+      <p class="host-entry-text">Tu prépares le quiz&nbsp;?</p>
+      <button type="button" class="btn btn--small btn--ghost btn--icon" id="mode-host">
+        <svg class="btn-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <!-- crayon : configurer les questions -->
+          <path d="M9 39 L11 31 L32 10 L38 16 L17 37 Z"/>
+          <path d="M28 14 L34 20"/>
+          <path d="M9 39 L15 37"/>
+        </svg>Organiser un quiz
+      </button>
+    </div>
+  </main>
+
+  <!-- ===================== Organisateur ===================== -->
+  <main class="view" id="view-editor" hidden>
+    <div class="editor-head">
+      <div>
+        <h1 class="editor-title">Mes questions</h1>
+        <p class="editor-hint">Coche la bonne réponse de chaque question.</p>
+      </div>
+
+      <!-- outils de fichier : secondaires, à l'écart du parcours principal -->
+      <div class="editor-tools">
+        <button type="button" class="btn btn--small btn--icon" id="export-quiz">
+          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3.5 V15 M7.5 10.5 L12 15 L16.5 10.5 M4.5 18.5 h15"/>
+          </svg>Export
+        </button>
+        <button type="button" class="btn btn--small btn--icon" id="import-quiz">
+          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15 V3.5 M7.5 8 L12 3.5 L16.5 8 M4.5 18.5 h15"/>
+          </svg>Import
+        </button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+    </div>
+
+    <div class="setting setting--title">
+      <label class="setting-label" for="quiz-title">Titre du quiz</label>
+      <input class="setting-input setting-input--text" id="quiz-title" type="text" maxlength="60"
+             placeholder="Sans titre" autocomplete="off">
+    </div>
+
+    <div class="setting">
+      <label class="setting-label" for="duration">Temps par question</label>
+      <input class="setting-input" id="duration" type="number" min="5" max="120" step="5" value="20">
+      <span class="setting-unit">secondes</span>
+      <span class="setting-note">Une bonne réponse rapporte de 500 à 1 000 points selon la rapidité.</span>
+    </div>
+
+    <div class="setting setting--demo">
+      <label class="toggle">
+        <input type="checkbox" id="demo-toggle" checked>
+        <span class="opt-box"></span>
+        <span class="setting-label">Question test au démarrage</span>
+      </label>
+    </div>
+
+    <!-- le bouton d'ajout appartient au bloc des questions -->
+    <div class="questions-block">
+      <div id="q-list"></div>
+      <button type="button" class="btn add-question" id="add-question">+ Ajouter une question</button>
+    </div>
+
+    <div class="editor-actions">
+      <p class="editor-msg" id="editor-msg"></p>
+      <button type="button" class="btn btn--primary" id="start-quiz">Lancer la partie &rarr;</button>
+    </div>
+  </main>
+
+  <!-- ===================== Participant : identité ===================== -->
+  <main class="view" id="view-name" hidden>
+    <form class="card" id="name-form">
+      <h1 class="card-title">Comment tu t&rsquo;appelles&nbsp;?</h1>
+      <p class="card-text">Ton nom s&rsquo;affichera avec ton score pendant la partie.</p>
+      <input class="name-input" id="player-name" type="text" maxlength="24"
+             placeholder="Ton nom" autocomplete="nickname" autocapitalize="words">
+
+      <p class="card-text">Et ton icône&nbsp;:</p>
+      <div class="avatar-grid" id="avatar-grid" role="radiogroup" aria-label="Choisis ton icône"></div>
+
+      <p class="card-text" id="name-msg"></p>
+      <div class="card-actions">
+        <button type="submit" class="btn">C&rsquo;est parti &rarr;</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- ===================== Participant : question ===================== -->
+  <main class="view" id="view-question" hidden>
+    <h1 class="question" id="question-text"></h1>
+
+    <div class="stage">
+      <div class="timer" id="timer" role="timer" aria-live="off">
+        <svg class="timer-ring" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="timer-arc" cx="50" cy="50" r="45"/>
+        </svg>
+        <span class="timer-value">20</span>
+      </div>
+      <p class="counter" id="question-counter"></p>
+    </div>
+
+    <div class="answers" id="answers"></div>
+  </main>
+
+  <!-- ===================== Participant : interstitiel ===================== -->
+  <main class="view" id="view-result" hidden>
+    <div class="card">
+      <svg class="verdict-mark" id="verdict-mark" viewBox="0 0 48 48" aria-hidden="true"></svg>
+      <h1 class="card-title" id="result-title"></h1>
+      <div class="recap" id="result-recap"></div>
+      <p class="card-text" id="result-text"></p>
+      <div class="card-actions">
+        <button type="button" class="btn" id="next-question"></button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== Organisateur : salon d'attente ===================== -->
+  <main class="view" id="view-lobby" hidden>
+    <div class="card">
+      <h1 class="card-title">Salon d&rsquo;attente</h1>
+      <p class="card-text">Partage ce lien, les participants apparaissent ici au fur et à mesure.<br>
+        Ils doivent avoir l&rsquo;accès <strong>Can interact</strong> (menu Share) pour pouvoir répondre.</p>
+
+      <div class="share">
+        <input class="share-link" id="share-link" type="text" readonly>
+        <button type="button" class="btn btn--small" id="copy-link">Copier</button>
+      </div>
+
+      <div class="joined">
+        <span class="joined-count" id="joined-count">0</span>
+        <span class="card-text" id="joined-label">participant en attente</span>
+        <div class="joined-names" id="joined-names"></div>
+      </div>
+
+      <div class="card-actions">
+        <button type="button" class="btn" id="start-game" disabled>Démarrer la partie &rarr;</button>
+      </div>
+      <p class="card-text" id="lobby-msg"></p>
+    </div>
+  </main>
+
+  <!-- ===================== Interstitiel de lancement ===================== -->
+  <main class="view" id="view-intro" hidden>
+    <div class="card">
+      <p class="intro-eyebrow">On y va</p>
+      <h1 class="intro-title" id="intro-title"></h1>
+      <p class="card-text" id="intro-text"></p>
+      <div class="card-actions">
+        <button type="button" class="btn btn--primary" id="intro-start" hidden>Première question &rarr;</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== Organisateur : écran de suivi ===================== -->
+  <main class="view" id="view-host" hidden>
+    <h1 class="question" id="host-question"></h1>
+
+    <div class="stage">
+      <div class="timer" id="host-timer" role="timer" aria-live="off">
+        <svg class="timer-ring" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="timer-arc" cx="50" cy="50" r="45"/>
+        </svg>
+        <span class="timer-value">20</span>
+      </div>
+      <p class="counter" id="host-progress"></p>
+    </div>
+
+    <div class="answers answers--static" id="host-answers"></div>
+
+    <!-- répartition des réponses, à la révélation -->
+    <div class="bars" id="host-bars" hidden></div>
+
+    <div class="recap" id="host-recap"></div>
+
+    <div class="card-actions" id="host-actions">
+      <button type="button" class="btn" id="host-next"></button>
+      <button type="button" class="btn btn--ghost" id="host-stop">Arrêter la partie</button>
+    </div>
+  </main>
+
+  <!-- confirmation d'arrêt : l'action coupe la partie pour tout le monde -->
+  <dialog class="modal" id="stop-modal">
+    <h2 class="modal-title">Arrêter la partie&nbsp;?</h2>
+    <p class="modal-text">
+      Elle se terminera immédiatement pour tous les participants, qui verront le classement
+      dans son état actuel.
+    </p>
+    <div class="card-actions">
+      <button type="button" class="btn btn--ghost" id="stop-cancel">Annuler</button>
+      <button type="button" class="btn" id="stop-confirm">Confirmer</button>
+    </div>
+  </dialog>
+
+  <!-- ===================== Organisateur : classement intermédiaire ===================== -->
+  <main class="view" id="view-standings" hidden>
+    <div class="card">
+      <div class="final-head">
+        <h1 class="final-heading">Classement</h1>
+        <p class="final-quiz" id="standings-quiz" hidden></p>
+      </div>
+      <p class="quip" id="standings-quip" hidden></p>
+      <div class="board" id="standings-board"></div>
+      <p class="card-text" id="standings-empty" hidden>Personne n’a encore marqué de point.</p>
+      <div class="card-actions">
+        <button type="button" class="btn" id="standings-next"></button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== Participant : attente ===================== -->
+  <main class="view" id="view-wait" hidden>
+    <div class="card">
+      <h1 class="card-title" id="wait-title"></h1>
+      <p class="card-text" id="wait-text"></p>
+      <div class="joined-names" id="wait-names"></div>
+    </div>
+  </main>
+
+  <!-- ===================== Participant : score final ===================== -->
+  <main class="view" id="view-score" hidden>
+    <div class="card">
+      <!-- hiérarchie : ce qu'on regarde d'abord, puis quel quiz, puis son état -->
+      <div class="final-head">
+        <h1 class="final-heading" id="final-heading">Classement final</h1>
+        <p class="final-quiz" id="final-quiz-title" hidden></p>
+        <p class="final-state" id="final-title">Partie terminée</p>
+      </div>
+      <p class="big-score" id="final-score"></p>
+      <p class="card-text" id="final-text"></p>
+      <p class="quip" id="final-quip" hidden></p>
+      <div class="board" id="final-board" hidden></div>
+      <div class="card-actions">
+        <button type="button" class="btn" id="replay">Rejouer</button>
+        <button type="button" class="btn btn--ghost" id="back-home">Accueil</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------- Symboles de cartes ---------------- */
+  var SHAPES = [
+    // pique
+    '<path d="M16 4 C16 4 5 12.5 5 18.5 A5 5 0 0 0 14.5 20.5 C14.5 24 13 26.5 11 28 L21 28 C19 26.5 17.5 24 17.5 20.5 A5 5 0 0 0 27 18.5 C27 12.5 16 4 16 4 Z"/>',
+    // coeur
+    '<path d="M16 28 C16 28 4 20 4 12.5 A6.5 6.5 0 0 1 16 9 A6.5 6.5 0 0 1 28 12.5 C28 20 16 28 16 28 Z"/>',
+    // trèfle
+    '<circle cx="16" cy="10.5" r="5.5"/><circle cx="10" cy="19" r="5.5"/><circle cx="22" cy="19" r="5.5"/>' +
+      '<path d="M16 19 C16 23 15 26 12.5 28.5 L19.5 28.5 C17 26 16 23 16 19"/>',
+    // carreau
+    '<path d="M16 3 C19 9 23 13.5 27.5 16 C23 18.5 19 23 16 29 C13 23 9 18.5 4.5 16 C9 13.5 13 9 16 3 Z"/>'
+  ];
+  var HATCH = ['hatch--a', 'hatch--b', 'hatch--c', 'hatch--d'];
+
+  // pictos des étiquettes : la coche pour le fait, la main pour le choix du joueur
+  var ICON_CHECK = '<svg class="tag-icon" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<path d="M2 8.5 L6 12.5 L14 3.5"/></svg>';
+  var ICON_HAND = '<svg class="tag-icon" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<path d="M7 9.5 V2.8 a1.3 1.3 0 0 1 2.6 0 V8"/>' +
+    '<path d="M9.6 8 V6.6 a1.2 1.2 0 0 1 2.4 0 V9"/>' +
+    '<path d="M12 9 v-1 a1.2 1.2 0 0 1 2.4 0 v3.4 a3.4 3.4 0 0 1 -3.4 3.4 H9.6 a3 3 0 0 1 -2.4 -1.2 L4.2 10.4 a1.2 1.2 0 0 1 2 -1.4 L7 10"/>' +
+    '</svg>';
+
+  /* ---------------- Avatars ----------------
+     Dix silhouettes au trait, assez différentes pour se distinguer d'un coup d'œil
+     même en petit, dans un badge ou une ligne de classement. */
+  var AVATARS = [
+    // étoile
+    '<path d="M12 3 L14.6 9.2 L21 9.8 L16.2 14.2 L17.6 20.6 L12 17.3 L6.4 20.6 L7.8 14.2 L3 9.8 L9.4 9.2 Z"/>',
+    // éclair
+    '<path d="M13.5 2.5 L5.5 13.5 H10.5 L9.5 21.5 L18 10.5 H13 Z"/>',
+    // fusée
+    '<path d="M12 2.5 C15.5 6 17 10 16.5 15 L12 19 L7.5 15 C7 10 8.5 6 12 2.5 Z"/>' +
+      '<circle cx="12" cy="9.5" r="2.2"/><path d="M9 20.5 L12 17 L15 20.5"/>',
+    // chat
+    '<path d="M5 8.5 L5 4.5 L9 7 M19 8.5 L19 4.5 L15 7"/>' +
+      '<path d="M5 8.5 C5 15 8 20 12 20 C16 20 19 15 19 8.5"/>' +
+      '<path d="M9.5 12 h.01 M14.5 12 h.01 M12 15 l-1.5 1 M12 15 l1.5 1"/>',
+    // parapluie
+    '<path d="M3 12 A9 9 0 0 1 21 12 Z"/><path d="M12 12 V18.5 A2.5 2.5 0 0 0 17 18.5"/>',
+    // feuille
+    '<path d="M20 4 C10 4 4 9 4 15.5 C4 18.5 5.5 20 8.5 20 C15 20 20 14 20 4 Z"/>' +
+      '<path d="M16.5 7.5 C12 11 9 15 7.5 19.5"/>',
+    // clé
+    '<circle cx="8" cy="8" r="4.5"/><path d="M11.2 11.2 L20 20 M17 17 l-2 2 M14.5 14.5 l-2 2"/>',
+    // lunettes
+    '<circle cx="6.5" cy="14" r="3.8"/><circle cx="17.5" cy="14" r="3.8"/>' +
+      '<path d="M10.3 14 C11 12.8 13 12.8 13.7 14 M2.7 14 C2.7 9 4.5 6.5 7 5.5 M21.3 14 C21.3 9 19.5 6.5 17 5.5"/>',
+    // montgolfière
+    '<path d="M12 2.8 C16.4 2.8 19.5 6.2 19.5 10.2 C19.5 13.5 15.5 16 12 16 C8.5 16 4.5 13.5 4.5 10.2 C4.5 6.2 7.6 2.8 12 2.8 Z"/>' +
+      '<path d="M9.5 15.6 L10 19 h4 l.5 -3.4 M12 2.8 C9.5 6 9 12 10 15.8 M12 2.8 C14.5 6 15 12 14 15.8"/>',
+    // boussole
+    '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 L10.5 10.5 L8.5 15.5 L13.5 13.5 Z"/>'
+  ];
+
+  function avatarSvg(index, extraClass) {
+    var i = Math.min(Math.max(Number(index) || 0, 0), AVATARS.length - 1);
+    return '<svg class="avatar ' + (extraClass || '') + '" viewBox="0 0 24 24" aria-hidden="true">' +
+      AVATARS[i] + '</svg>';
+  }
+
+  /* ---------------- Remarques de l'arbitre ----------------
+     Une phrase tirée au sort commente la question ; toujours du côté du joueur,
+     y compris quand il s'est trompé. {nom} est remplacé au moment de l'affichage. */
+  var QUIPS_OK = [
+    '{nom} a coché la bonne case sans trembler. Ça s’appelle du métier.',
+    'Pendant que les autres réfléchissaient, {nom} avait déjà répondu. Impressionnant.',
+    'Bonne réponse pour {nom}, qui commence à inquiéter tout le monde.',
+    '{nom} trouve, {nom} marque, {nom} savoure. On ne peut pas lui en vouloir.',
+    'Réponse juste pour {nom} : la culture générale, ça se travaille — ou ça se devine très bien.',
+    '{nom} n’a pas hésité une seconde. Ou alors il ou elle cache bien son jeu.'
+  ];
+  var QUIPS_KO = [
+    '{nom} a tenté une réponse audacieuse. L’audace paiera plus tard.',
+    'Ce n’était pas la bonne pour {nom}, mais l’idée était défendable.',
+    '{nom} a choisi le mauvais symbole, avec beaucoup de conviction.',
+    'Raté pour {nom}, qui garde toute son avance en enthousiasme.',
+    '{nom} explore consciencieusement les mauvaises réponses. Bientôt il n’en restera plus.',
+    'Pas de point pour {nom} cette fois. La prochaine est déjà là.'
+  ];
+  var QUIPS_NONE = [
+    '{nom} a préféré laisser passer celle-là. Stratégie du mystère.',
+    'Rien reçu de {nom} : la question était peut-être trop facile.',
+    '{nom} réfléchissait encore quand le temps s’est arrêté. Ça arrive aux meilleurs.',
+    'Le chrono a été plus rapide que {nom}. Il ne l’emportera pas au paradis.'
+  ];
+  var QUIPS_WINNER = [
+    'Bravo {nom} ! Personne n’a réussi à suivre le rythme.',
+    'Chapeau {nom} : première place méritée, et pas volée d’un point.',
+    'Félicitations {nom}, qui repart avec le titre et l’admiration générale.',
+    '{nom} termine en tête. On demande une prise de sang, mais bravo.',
+    'Première place pour {nom} : rapide, juste, et un peu insolent.',
+    'Victoire de {nom} ! Les autres ont appris beaucoup de choses, c’est déjà ça.'
+  ];
+
+  function pickQuip(list, name) {
+    return list[Math.floor(Math.random() * list.length)].split('{nom}').join(name);
+  }
+
+  var MARK_OK = '<path d="M8 25 L19 36 L40 12"/>';
+  var MARK_KO = '<path d="M12 12 L36 36"/><path d="M36 12 L12 36"/>';
+
+  /* Question test jouée avant la première vraie question : elle apprend le geste
+     (choisir un bloc avant la fin du chrono) sans compter dans le score. */
+  var DEMO_QUESTION = {
+    q: 'Question test : touche le bloc du trèfle pour t’entraîner.',
+    a: ['Le pique', 'Le cœur', 'Le trèfle', 'Le carreau'],
+    correct: 2
+  };
+
+  var POINTS = 1000;
+  var DEFAULT_DURATION = 20;  // secondes pour répondre, réglable par l'organisateur
+  var MIN_DURATION = 5;
+  var MAX_DURATION = 120;
+  var URGENT_AT = 5;          // seuil d'affichage « ça se termine »
+  var READ_TIME = 5;          // secondes de lecture avant l'affichage des réponses
+  var STORAGE_KEY = 'quiz-sketch-v1';
+  var NAME_KEY = 'quiz-sketch-player';
+  var ICON_KEY = 'quiz-sketch-icon';
+  var DURATION_KEY = 'quiz-sketch-duration';
+  var TITLE_KEY = 'quiz-sketch-title';
+  var DEMO_KEY = 'quiz-sketch-demo';
+
+  function shapeSvg(index, extraClass) {
+    return '<svg class="shape ' + (extraClass || '') + '" viewBox="0 0 32 32" aria-hidden="true">' +
+      SHAPES[index] + '</svg>';
+  }
+
+  /* ---------------- Données ---------------- */
+  var DEFAULT_QUIZ = [
+    { q: 'Quelle est la capitale de l’Australie ?', a: ['Sydney', 'Melbourne', 'Canberra', 'Perth'], correct: 2 },
+    { q: 'Combien de cordes a une guitare classique ?', a: ['4', '6', '8', '12'], correct: 1 }
+  ];
+
+  // `draft` = ce que l'organisateur édite et enregistre ; `quiz` = ce qui est joué.
+  // Les deux sont distincts : une partie en ligne ne doit jamais écraser le brouillon.
+  var draft = load();
+  var quiz = draft;
+  var duration = loadDuration();
+  var draftTitle = loadTitle();   // titre édité par l'organisateur
+  var quizTitle = draftTitle;     // titre du quiz réellement joué
+  var draftDemo = loadDemoFlag(); // question test au démarrage, réglée par l'organisateur
+  var quizDemo = draftDemo;
+
+  function loadTitle() {
+    try {
+      return String(localStorage.getItem(TITLE_KEY) || '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function loadDemoFlag() {
+    try {
+      return localStorage.getItem(DEMO_KEY) !== 'off';   // activée par défaut
+    } catch (e) {
+      return true;
+    }
+  }
+
+  // une durée hors bornes (saisie ou stockage abîmé) retombe sur la valeur par défaut
+  function clampDuration(value) {
+    var seconds = Math.round(Number(value));
+    if (!isFinite(seconds)) return DEFAULT_DURATION;
+    return Math.min(Math.max(seconds, MIN_DURATION), MAX_DURATION);
+  }
+
+  function loadDuration() {
+    try {
+      var raw = localStorage.getItem(DURATION_KEY);
+      if (raw !== null && raw !== '') return clampDuration(raw);
+    } catch (e) { /* stockage indisponible */ }
+    return DEFAULT_DURATION;
+  }
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch (e) { /* stockage indisponible : on part du quiz par défaut */ }
+    return JSON.parse(JSON.stringify(DEFAULT_QUIZ));
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+      localStorage.setItem(DURATION_KEY, String(duration));
+      localStorage.setItem(TITLE_KEY, draftTitle);
+      localStorage.setItem(DEMO_KEY, draftDemo ? 'on' : 'off');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // le stockage est refusé dans certains contextes (page ouverte en data:, navigation privée…)
+  function storageAvailable() {
+    try {
+      localStorage.setItem(STORAGE_KEY + '-test', '1');
+      localStorage.removeItem(STORAGE_KEY + '-test');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var canStore = storageAvailable();
+
+  /* ---------------- Thème clair / sombre ----------------
+     Sans choix explicite, la page suit le thème du lecteur ; le bouton stampe
+     data-theme sur la racine, ce que le CSS sait déjà interpréter. */
+  var THEME_KEY = 'quiz-sketch-theme';
+  var ICON_SUN = '<circle cx="12" cy="12" r="4.6"/><path d="M12 2.4v2.6M12 19v2.6M4.2 4.2l1.9 1.9' +
+    'M17.9 17.9l1.9 1.9M2.4 12h2.6M19 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/>';
+  var ICON_MOON = '<path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11 Z"/>';
+
+  var themeToggle = document.getElementById('theme-toggle');
+  var themeIcon = document.getElementById('theme-icon');
+  var darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function currentTheme() {
+    var stamped = document.documentElement.getAttribute('data-theme');
+    if (stamped === 'dark' || stamped === 'light') return stamped;
+    return (darkQuery && darkQuery.matches) ? 'dark' : 'light';
+  }
+
+  function paintThemeToggle() {
+    var goingDark = (currentTheme() === 'light');
+    var label = goingDark ? 'Passer au thème sombre' : 'Passer au thème clair';
+    themeIcon.innerHTML = goingDark ? ICON_MOON : ICON_SUN;   // on montre la destination
+    themeToggle.setAttribute('aria-label', label);
+    themeToggle.setAttribute('title', label);
+  }
+
+  try {
+    var savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  } catch (e) { /* stockage indisponible : on suit le thème du lecteur */ }
+
+  paintThemeToggle();
+
+  themeToggle.addEventListener('click', function () {
+    var next = (currentTheme() === 'dark') ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (e) { /* le choix vaut pour la session */ }
+    paintThemeToggle();
+  });
+
+  // sans choix explicite, on suit les changements de thème du système
+  if (darkQuery && darkQuery.addEventListener) {
+    darkQuery.addEventListener('change', paintThemeToggle);
+  }
+
+  /* ---------------- Navigation entre vues ---------------- */
+  var views = {
+    home: document.getElementById('view-home'),
+    editor: document.getElementById('view-editor'),
+    lobby: document.getElementById('view-lobby'),
+    intro: document.getElementById('view-intro'),
+    host: document.getElementById('view-host'),
+    standings: document.getElementById('view-standings'),
+    name: document.getElementById('view-name'),
+    wait: document.getElementById('view-wait'),
+    question: document.getElementById('view-question'),
+    result: document.getElementById('view-result'),
+    score: document.getElementById('view-score')
+  };
+
+  var homeLink = document.getElementById('home-link');
+  var badgeLeft = document.getElementById('badge-left');
+  var badgeRight = document.getElementById('badge-right');
+  var badgeMenu = document.getElementById('badge-menu');
+  var badgePop = document.getElementById('badge-pop');
+
+  var TIMED_VIEWS = { question: true, host: true };
+  var BADGED_VIEWS = {
+    question: true, result: true, score: true, host: true, wait: true, standings: true
+  };
+
+  // le titre suit tout le parcours, en petit sous la barre du haut
+  function paintCaption(name) {
+    var inGame = BADGED_VIEWS[name] || name === 'intro';
+    var caption = document.getElementById('quiz-caption');
+    caption.textContent = quizTitle;
+    caption.hidden = !(inGame && quizTitle && name !== 'intro');
+  }
+
+  function show(name) {
+    if (!TIMED_VIEWS[name]) stopTimer();
+    paintCaption(name);
+    Object.keys(views).forEach(function (key) {
+      views[key].hidden = (key !== name);
+    });
+    homeLink.hidden = (name === 'home');
+    badgeLeft.hidden = !BADGED_VIEWS[name];
+    badgeMenu.hidden = !BADGED_VIEWS[name];
+    window.scrollTo(0, 0);
+  }
+
+  homeLink.addEventListener('click', function () {
+    leaveGame();
+    show('home');
+  });
+  document.getElementById('mode-host').addEventListener('click', function () {
+    renderEditor();
+    show('editor');
+  });
+  document.getElementById('mode-player').addEventListener('click', function () {
+    if (cloud.db && liveState && liveState.phase !== 'ended') {
+      joining = true;          // on rejoindra la partie en cours après le nom
+    } else {
+      joining = false;         // pas de partie en ligne : repli solo
+    }
+    askName();
+  });
+
+  /* ================= Partie en ligne (capabilities db + user) =================
+     La page doit rester jouable seule : tant que `cloud.db` est null, tout le
+     reste du script fonctionne exactement comme avant, en solo. */
+
+  var ARTIFACT_URL = 'https://claude.ai/artifact/3tYZHT1x6SA4Eap3eLXT6L';
+
+  var cloud = { db: null, uid: null, canEdit: false, canWrite: null, downloads: null };
+  var liveState = null;     // dernier `game/state` connu
+  var livePlayers = [];     // joueurs de la partie en cours
+  var unsubState = null;
+  var unsubPlayers = null;
+  var unsubQuiz = null;
+  var cloudQuiz = null;     // quiz de la partie en cours, distinct du brouillon
+  var cloudDuration = null;
+  var cloudTitle = '';
+  var cloudDemo = true;
+  var isHost = false;       // cet onglet pilote la partie
+  var joining = false;      // l'écran du nom doit inscrire à la partie en ligne
+  var myGameId = '';
+  var myChoice = null;
+  var shownIndex = -1;      // question déjà rendue, pour ignorer les répétitions
+  var shownPhase = '';
+
+  if (window.claude && typeof window.claude.use === 'function') {
+    // le bac à sable du lecteur bloque les téléchargements lancés par la page :
+    // l'export passe par la capability prévue pour ça
+    window.claude.use('downloads').then(function (downloads) {
+      cloud.downloads = downloads;
+    }, function () { /* indisponible : repli navigateur */ });
+
+    Promise.all([window.claude.use('db'), window.claude.use('user')])
+      .then(function (parts) {
+        cloud.db = parts[0];
+        var user = parts[1];
+        if (!cloud.db) return null;
+        return Promise.all([
+          user ? user.id() : null,
+          user ? user.canEdit() : false,
+          user ? user.can('data.write') : null
+        ]).then(function (who) {
+          cloud.uid = who[0];
+          cloud.canEdit = who[1];
+          cloud.canWrite = who[2];   // null = la plateforme n'a rien dit
+          watchGame();
+        });
+      })
+      .catch(function () { cloud.db = null; });
+  }
+
+  // une seule souscription par chemin, ouverte au démarrage et gardée
+  function watchGame() {
+    unsubState = cloud.db.doc('game/state').onSnapshot(function (snap) {
+      liveState = snap.exists ? snap.data() : null;
+      onGameState();
+    }, onDbError);
+
+    unsubPlayers = cloud.db.collection('players').onSnapshot(function (snap) {
+      livePlayers = snap.docs.map(function (doc) {
+        var body = doc.data() || {};
+        return {
+          id: doc.id,
+          gameId: body.gameId || '',
+          name: String(body.name || ''),
+          icon: Math.min(Math.max(Number(body.icon) || 0, 0), AVATARS.length - 1),
+          score: Number(body.score) || 0,
+          answeredIndex: typeof body.answeredIndex === 'number' ? body.answeredIndex : -1,
+          choice: typeof body.choice === 'number' ? body.choice : -1,
+          demoAnswered: !!body.demoAnswered
+        };
+      });
+      onPlayers();
+    }, onDbError);
+
+    // on mémorise le quiz de la partie sans toucher au brouillon de l'éditeur
+    unsubQuiz = cloud.db.doc('quiz/current').onSnapshot(function (snap) {
+      if (!snap.exists) return;
+      var body = snap.data();
+      if (Array.isArray(body.questions) && body.questions.length) {
+        cloudQuiz = body.questions;
+        cloudDuration = clampDuration(body.duration);
+        cloudTitle = String(body.title || '');
+        cloudDemo = (body.demo !== false);
+      }
+    }, onDbError);
+  }
+
+  // à n'appeler que pour jouer en ligne, jamais depuis l'éditeur
+  function useCloudQuiz() {
+    if (cloudQuiz) {
+      quiz = cloudQuiz;
+      duration = cloudDuration;
+      quizTitle = cloudTitle;
+      quizDemo = cloudDemo;
+    }
+  }
+
+  function onDbError() {
+    // erreur terminale : on coupe proprement et la page reste jouable en solo
+    cloud.db = null;
+    if (views.lobby.hidden === false || views.host.hidden === false || views.wait.hidden === false) {
+      show('home');
+    }
+  }
+
+  // la question test remplace la question courante tant que `demo` est vrai
+  function isDemo() {
+    return !!(liveState && liveState.demo);
+  }
+
+  function currentItem() {
+    if (!liveState) return null;
+    return isDemo() ? DEMO_QUESTION : quiz[liveState.index];
+  }
+
+  // a-t-il répondu à ce qui est affiché en ce moment ?
+  function hasAnswered(p) {
+    return isDemo() ? !!p.demoAnswered : (p.answeredIndex >= liveState.index);
+  }
+
+  function currentPlayers() {
+    var gameId = liveState ? liveState.gameId : '';
+    return livePlayers.filter(function (p) { return p.gameId === gameId; });
+  }
+
+  function leaveGame() {
+    isHost = false;
+    hostStep = '';
+    joining = false;
+    myGameId = '';
+    shownIndex = -1;
+    shownPhase = '';
+  }
+
+  /* ---------------- Organisateur : salon d'attente ---------------- */
+  var shareLink = document.getElementById('share-link');
+  var joinedCount = document.getElementById('joined-count');
+  var joinedLabel = document.getElementById('joined-label');
+  var joinedNames = document.getElementById('joined-names');
+  var startGameButton = document.getElementById('start-game');
+  var lobbyMsg = document.getElementById('lobby-msg');
+
+  function openLobby() {
+    isHost = true;
+    lobbyMsg.textContent = '';
+    shareLink.value = ARTIFACT_URL;
+    renderLobby();
+    show('lobby');
+
+    var gameId = 'g' + Date.now();
+    // la partie précédente ne doit pas compter dans le salon
+    cloud.db.collection('players').get().then(function (snap) {
+      return Promise.all(snap.docs.map(function (doc) {
+        return cloud.db.doc('players/' + doc.id).delete();
+      }));
+    }).catch(function () { /* rien à purger */ })
+      .then(function () {
+        return cloud.db.doc('quiz/current').set({
+          title: quizTitle, questions: quiz, duration: duration, demo: quizDemo
+        });
+      })
+      .then(function () {
+        return cloud.db.doc('game/state').set({
+          gameId: gameId, phase: 'lobby', index: -1, startedAt: 0
+        });
+      })
+      .catch(function () {
+        lobbyMsg.textContent = 'La partie n’a pas pu être ouverte. Tu peux jouer en solo depuis l’accueil.';
+      });
+  }
+
+  // icône + nom : le nom est du texte saisi par quelqu'un d'autre, jamais du HTML
+  function playerChip(p) {
+    var chip = document.createElement('span');
+    chip.className = 'chip' + (p.id === cloud.uid ? ' chip--me' : '');
+    chip.innerHTML = avatarSvg(p.icon);
+    chip.appendChild(document.createTextNode(p.name));
+    return chip;
+  }
+
+  function renderLobby() {
+    var players = currentPlayers();
+    joinedCount.textContent = players.length;
+    joinedLabel.textContent = players.length === 1
+      ? 'participant a rejoint' : 'participants ont rejoint';
+    joinedNames.innerHTML = '';
+    players.forEach(function (p) {
+      joinedNames.appendChild(playerChip(p));
+    });
+    startGameButton.disabled = (players.length === 0);
+    startGameButton.textContent = players.length
+      ? 'Démarrer avec ' + players.length + ' joueur' + (players.length > 1 ? 's' : '') + ' →'
+      : 'En attente d’un premier joueur…';
+  }
+
+  document.getElementById('copy-link').addEventListener('click', function () {
+    shareLink.focus();
+    shareLink.select();
+    try {
+      navigator.clipboard.writeText(ARTIFACT_URL).then(function () {
+        lobbyMsg.textContent = 'Lien copié.';
+      }, function () {
+        lobbyMsg.textContent = 'Copie refusée par le navigateur : le lien est sélectionné, fais Ctrl+C.';
+      });
+    } catch (e) {
+      lobbyMsg.textContent = 'Le lien est sélectionné, fais Ctrl+C.';
+    }
+  });
+
+  // le départ passe d'abord par l'interstitiel qui annonce le quiz
+  startGameButton.addEventListener('click', function () {
+    cloud.db.doc('game/state').set({
+      gameId: liveState ? liveState.gameId : 'g' + Date.now(),
+      phase: 'intro', index: -1, startedAt: Date.now()
+    }).catch(function () {
+      lobbyMsg.textContent = 'La partie n’a pas pu démarrer.';
+    });
+  });
+
+  var introTitle = document.getElementById('intro-title');
+  var introText = document.getElementById('intro-text');
+  var introStart = document.getElementById('intro-start');
+
+  function renderIntro() {
+    introTitle.textContent = quizTitle || 'La partie commence';
+    if (isHost) {
+      introText.textContent = quiz.length + ' question' + (quiz.length > 1 ? 's' : '') + ' · ' +
+        duration + ' secondes chacune' +
+        (quizDemo ? '. On commence par une question test.' : '.');
+    } else {
+      introText.textContent = quizDemo
+        ? 'Ça démarre par une question test, pour prendre la main. Elle ne compte pas.'
+        : 'Prépare-toi, l’organisateur lance la première question.';
+    }
+    introStart.textContent = quizDemo ? 'Question test →' : 'Première question →';
+    introStart.hidden = !isHost;
+    show('intro');
+  }
+
+  // question test si l'organisateur l'a gardée, sinon on attaque le quiz
+  introStart.addEventListener('click', function () { hostGoToQuestion(0, quizDemo); });
+
+  /* ---------------- Organisateur : écran de suivi ---------------- */
+  var hostQuestion = document.getElementById('host-question');
+  var hostProgress = document.getElementById('host-progress');
+  var hostTimerEl = document.getElementById('host-timer');
+  var hostAnswers = document.getElementById('host-answers');
+  var hostBars = document.getElementById('host-bars');
+  var hostRecap = document.getElementById('host-recap');
+
+  // combien de personnes ont coché chaque réponse, sur la question révélée
+  function renderHostBars(item) {
+    var counts = [0, 0, 0, 0];
+    currentPlayers().forEach(function (p) {
+      if (hasAnswered(p) && p.choice >= 0 && p.choice <= 3) counts[p.choice] += 1;
+    });
+
+    var tallest = Math.max(counts[0], counts[1], counts[2], counts[3], 1);
+
+    hostBars.innerHTML = item.a.map(function (answer, ai) {
+      var isRight = (ai === item.correct);
+      var height = counts[ai] ? Math.max(Math.round(counts[ai] / tallest * 100), 8) : 3;
+      return '' +
+        '<div class="bar-col' + (isRight ? ' bar-col--right' : '') + '">' +
+          // l'étiquette pleine dit la bonne réponse de loin, sans avoir à lire
+          (isRight ? '<span class="tag tag--right">' + ICON_CHECK + 'Bonne réponse</span>'
+                   : '<span class="tag tag--ghost" aria-hidden="true"></span>') +
+          '<span class="bar-count">' + counts[ai] + '</span>' +
+          '<div class="bar-track">' +
+            '<div class="bar-fill ' + HATCH[ai] + (isRight ? ' bar-fill--right' : '') +
+              '" style="height: ' + height + '%"></div>' +
+          '</div>' +
+          '<span class="bar-label">' + shapeSvg(ai) +
+            '<span>' + escapeAttr(answer) + '</span>' +
+          '</span>' +
+        '</div>';
+    }).join('');
+
+    hostBars.hidden = false;
+  }
+  var hostNext = document.getElementById('host-next');
+  var hostActions = document.getElementById('host-actions');
+  var hostStop = document.getElementById('host-stop');
+  var stopModal = document.getElementById('stop-modal');
+
+  function closeStopModal() {
+    if (stopModal.open) stopModal.close();
+  }
+
+  function stopTheGame() {
+    closeStopModal();
+    stopTimer();
+    hostSetPhase('ended', true);
+  }
+
+  hostStop.addEventListener('click', function () {
+    if (typeof stopModal.showModal === 'function') {
+      stopModal.showModal();
+    } else if (window.confirm('Arrêter la partie pour tous les participants ?')) {
+      stopTheGame();   // repli si le navigateur ne connaît pas <dialog>
+    }
+  });
+
+  document.getElementById('stop-cancel').addEventListener('click', closeStopModal);
+  document.getElementById('stop-confirm').addEventListener('click', stopTheGame);
+
+  function hostGoToQuestion(index, demo) {
+    cloud.db.doc('game/state').set({
+      gameId: liveState ? liveState.gameId : 'g' + Date.now(),
+      phase: 'question',
+      index: index,
+      demo: !!demo,
+      startedAt: Date.now()
+    }).catch(function () {
+      lobbyMsg.textContent = 'La partie n’a pas pu démarrer.';
+    });
+  }
+
+  function hostSetPhase(phase, stopped) {
+    if (!liveState) return;
+    cloud.db.doc('game/state').update({ phase: phase, stopped: !!stopped }).catch(function () {});
+  }
+
+  function renderHostQuestion() {
+    var item = currentItem();
+    if (!item) return;
+    hostStep = 'question';
+    hostTimerEl.hidden = false;
+    hostBars.hidden = true;   // pas de répartition avant la révélation
+    closeStopModal();
+    hostQuestion.textContent = item.q;
+    hostAnswers.innerHTML = answersHtml(item, false);   // les joueurs voient la même chose
+    hostAnswers.hidden = true;                          // …après le temps de lecture
+    hostRecap.innerHTML = '';
+    hostNext.textContent = 'Révéler la réponse →';
+    badgeLeft.textContent = isDemo()
+      ? 'Question test' : 'Question ' + (liveState.index + 1) + ' / ' + quiz.length;
+    renderHostProgress();
+    show('host');
+
+    // pendant la lecture, rien d'autre que la question : pas de bouton à portée de clic
+    hostActions.hidden = true;
+
+    runQuestionTimeline(liveState.startedAt, hostProgress, function () {
+      hostAnswers.hidden = false;
+      hostActions.hidden = false;
+      renderHostProgress();
+    }, function () { hostSetPhase('reveal'); });
+  }
+
+  function renderHostReveal() {
+    var item = currentItem();
+    if (!item) return;
+    hostStep = 'reveal';
+    stopTimer();
+    hostTimerEl.hidden = true;   // le temps de réponse est fini, le décompte n'a plus de sens
+    hostActions.hidden = false;
+    closeStopModal();
+    hostQuestion.textContent = item.q;
+    hostAnswers.innerHTML = '';   // les barres portent désormais les libellés
+    hostRecap.innerHTML = '';
+    renderHostBars(item);
+    // après la question test, on enchaîne sur le quiz : ni classement ni points à montrer
+    hostNext.textContent = isDemo() ? 'Commencer le quiz →'
+      : (isLastQuestion() ? 'Voir le classement final →' : 'Voir le classement →');
+    renderHostProgress();
+    show('host');
+  }
+
+  function renderHostProgress() {
+    var players = currentPlayers();
+    var answered = players.filter(hasAnswered).length;
+    // pendant la lecture, le compteur porte le message de lecture : on n'écrase pas
+    if (!readTimer) hostProgress.textContent = answered + ' / ' + players.length + ' ont répondu';
+    updateScoreBadge();
+    // une réponse tardive doit se voir tout de suite dans la répartition
+    if (hostStep === 'reveal' && currentItem()) renderHostBars(currentItem());
+  }
+
+  /* Classement intermédiaire : une étape locale à l'organisateur, entre la
+     révélation et la question suivante. Les participants gardent leur écran de
+     résultat pendant ce temps, l'état de la partie ne change pas. */
+  var standingsQuizTitle = document.getElementById('standings-quiz');
+  var standingsBoard = document.getElementById('standings-board');
+  var standingsEmpty = document.getElementById('standings-empty');
+  var standingsNext = document.getElementById('standings-next');
+  var standingsQuip = document.getElementById('standings-quip');
+  var standingsQuipKey = '';
+  var hostStep = '';   // 'question' | 'reveal' | 'standings'
+
+  // la remarque est tirée une fois par question : un rafraîchissement ne la rejoue pas
+  function paintStandingsQuip() {
+    var key = (liveState.gameId || '') + ':' + liveState.index;
+    if (standingsQuipKey === key) return;
+
+    var item = quiz[liveState.index];
+    // on ne commente que les joueurs dont on sait vraiment ce qu'ils ont fait
+    var players = currentPlayers().filter(function (p) {
+      return p.answeredIndex < liveState.index || (item && p.choice >= 0);
+    });
+    if (!item || !players.length) {
+      standingsQuip.hidden = true;
+      standingsQuipKey = key;
+      return;
+    }
+
+    var who = players[Math.floor(Math.random() * players.length)];
+    var list;
+    if (who.answeredIndex < liveState.index) list = QUIPS_NONE;
+    else if (who.choice === item.correct) list = QUIPS_OK;
+    else list = QUIPS_KO;
+
+    standingsQuip.textContent = pickQuip(list, who.name);
+    standingsQuip.hidden = false;
+    standingsQuipKey = key;
+  }
+
+  function renderStandings() {
+    hostStep = 'standings';
+    standingsQuizTitle.textContent = quizTitle;
+    standingsQuizTitle.hidden = !quizTitle;
+    paintStandingsQuip();
+    standingsEmpty.hidden = renderBoard(standingsBoard);
+    standingsNext.textContent = 'Question suivante →';   // jamais atteint à la dernière question
+    badgeLeft.textContent = 'Question ' + (liveState.index + 1) + ' / ' + quiz.length;
+    updateScoreBadge();
+    show('standings');
+  }
+
+  function isLastQuestion() {
+    return !liveState || liveState.index + 1 >= quiz.length;
+  }
+
+  hostNext.addEventListener('click', function () {
+    if (!liveState) return;
+    if (liveState.phase === 'question') {
+      hostSetPhase('reveal');
+    } else if (isDemo()) {
+      hostGoToQuestion(0, false);   // l'entraînement est fini, le quiz commence
+    } else if (isLastQuestion()) {
+      hostSetPhase('ended');   // le classement final tient lieu de classement d'étape
+    } else {
+      renderStandings();
+    }
+  });
+
+  standingsNext.addEventListener('click', function () {
+    if (!liveState) return;
+    hostGoToQuestion(liveState.index + 1);
+  });
+
+  /* ---------------- Participant : suivre la partie ---------------- */
+  var waitTitle = document.getElementById('wait-title');
+  var waitText = document.getElementById('wait-text');
+  var waitNames = document.getElementById('wait-names');
+
+  function showWaiting(title, text) {
+    waitTitle.textContent = title;
+    waitText.textContent = text;
+    waitNames.innerHTML = '';
+    currentPlayers().forEach(function (p) {
+      waitNames.appendChild(playerChip(p));
+    });
+    badgeLeft.textContent = liveState && liveState.index >= 0
+      ? 'Question ' + (liveState.index + 1) + ' / ' + quiz.length : 'Salon';
+    updateScoreBadge();
+    show('wait');
+  }
+
+  // dit précisément ce qui a été refusé, plutôt que de supposer
+  function writeRefusedMessage(error) {
+    var code = (error && error.code) || '';
+    if (code === 'invalid_argument') {
+      return 'Ton accès à ce quiz est en lecture seule. L’organisateur doit régler le partage ' +
+        'sur « Can interact » (menu Share de la page), pas « Can view ».';
+    }
+    if (code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') {
+      return 'Cette page n’a pas reçu l’accès aux données de la partie dans ce navigateur.';
+    }
+    if (code === 'revoked') {
+      return 'Ton accès à cette partie a été retiré en cours de route.';
+    }
+    return 'Écriture impossible pour le moment' + (code ? ' (' + code + ')' : '') + '. Réessaie.';
+  }
+
+  function joinGame() {
+    if (!cloud.uid) {
+      nameMsg.textContent = 'Impossible de rejoindre : ton compte n’est pas reconnu sur cette partie ' +
+        '(il faut être connecté à Claude dans l’organisation propriétaire du quiz).';
+      return false;
+    }
+    if (cloud.canWrite === false) {
+      nameMsg.textContent = 'Ton accès à ce quiz est en lecture seule. Demande à l’organisateur de ' +
+        'régler le partage sur « Can interact » au lieu de « Can view ».';
+      return false;
+    }
+    useCloudQuiz();   // on joue le quiz de l'organisateur, pas son propre brouillon
+    myGameId = liveState.gameId;
+    myChoice = null;
+    score = 0;
+    rights = 0;
+    lastAward = 0;
+    shownIndex = -1;
+    shownPhase = '';
+    cloud.db.doc('players/' + cloud.uid).set({
+      gameId: myGameId, name: player, icon: playerIcon, score: 0,
+      answeredIndex: -1, choice: -1, demoAnswered: false
+    }).catch(function (error) {
+      myGameId = '';   // on n'est pas dans la partie : on ne fait pas semblant
+      showWaiting('Inscription refusée', writeRefusedMessage(error));
+    });
+    showWaiting('Tu es dans la partie', 'En attente du départ donné par l’organisateur…');
+    onGameState();   // partie déjà en cours : on rattrape la question courante
+    return true;
+  }
+
+  function writeMyProgress() {
+    if (!cloud.uid) return;
+    cloud.db.doc('players/' + cloud.uid).set({
+      gameId: myGameId,
+      name: player,
+      icon: playerIcon,
+      score: score,
+      // la question test n'avance pas le quiz : elle a son propre marqueur
+      answeredIndex: (liveState && !isDemo()) ? liveState.index : -1,
+      demoAnswered: isDemo(),
+      choice: myChoice === null ? -1 : myChoice
+    }).catch(function (error) {
+      // le score reste juste chez le joueur, mais il doit savoir qu'il ne compte pas
+      showWaiting('Réponse non transmise', writeRefusedMessage(error));
+    });
+  }
+
+  // toute l'avancée du participant est pilotée par `game/state`
+  function onGameState() {
+    if (!liveState) return;
+
+    if (isHost) {
+      if (liveState.phase === 'lobby') renderLobby();
+      else if (liveState.phase === 'intro') renderIntro();
+      else if (liveState.phase === 'question') renderHostQuestion();
+      // le classement est une étape locale : un rafraîchissement ne doit pas en sortir
+      else if (liveState.phase === 'reveal') {
+        if (hostStep === 'standings') renderStandings();
+        else renderHostReveal();
+      } else if (liveState.phase === 'ended') showScore();
+      return;
+    }
+
+    if (!myGameId || myGameId !== liveState.gameId) return; // partie d'un autre round
+
+    useCloudQuiz();
+
+    // la clé distingue la question test de la vraie question de même rang
+    var stepKey = (isDemo() ? 'demo' : 'q') + liveState.index;
+
+    if (liveState.phase === 'intro' && shownPhase !== 'intro') {
+      shownPhase = 'intro';
+      shownIndex = -1;
+      renderIntro();
+    } else if (liveState.phase === 'question' && shownPhase !== 'question-' + stepKey) {
+      shownIndex = liveState.index;
+      shownPhase = 'question-' + stepKey;
+      myChoice = null;
+      lastAward = 0;
+      current = liveState.index;
+      renderQuestion(liveState.startedAt, function () {
+        showWaiting('Temps écoulé', 'En attente des autres participants…');
+      });
+    } else if (liveState.phase === 'reveal' && shownPhase !== 'reveal-' + stepKey) {
+      shownPhase = 'reveal-' + stepKey;
+      current = liveState.index;
+      revealResult(myChoice, true);
+    } else if (liveState.phase === 'ended' && shownPhase !== 'ended') {
+      shownPhase = 'ended';
+      showScore();
+    }
+  }
+
+  function onPlayers() {
+    if (isHost && !views.lobby.hidden) renderLobby();
+    else if (isHost && !views.standings.hidden) renderStandings();
+    else if (isHost && !views.host.hidden) renderHostProgress();
+    else if (!views.wait.hidden) showWaiting(waitTitle.textContent, waitText.textContent);
+  }
+
+  // sert le classement intermédiaire comme le classement final
+  function renderBoard(board) {
+    board = board || document.getElementById('final-board');
+    var players = currentPlayers().slice().sort(function (a, b) { return b.score - a.score; });
+    if (!players.length) {
+      board.hidden = true;
+      return false;
+    }
+    board.innerHTML = '';
+    players.forEach(function (p, i) {
+      var row = document.createElement('div');
+      row.className = 'board-row' + (p.id === cloud.uid ? ' board-row--me' : '');
+
+      var rank = document.createElement('span');
+      rank.className = 'board-rank';
+      rank.textContent = (i + 1) + '.';
+
+      var name = document.createElement('span');
+      name.className = 'board-name';
+      name.innerHTML = avatarSvg(p.icon);
+      name.appendChild(document.createTextNode(p.name));
+
+      var points = document.createElement('span');
+      points.className = 'board-score';
+      points.textContent = p.score + ' pts';
+
+      row.appendChild(rank);
+      row.appendChild(name);
+      row.appendChild(points);
+      board.appendChild(row);
+    });
+    board.hidden = false;
+    return true;
+  }
+
+  /* ---------------- Mode organisateur ---------------- */
+  var qList = document.getElementById('q-list');
+  var editorMsg = document.getElementById('editor-msg');
+  var durationInput = document.getElementById('duration');
+  var titleInput = document.getElementById('quiz-title');
+  var autoSaveTimer = null;
+
+  var demoToggle = document.getElementById('demo-toggle');
+
+  titleInput.value = draftTitle;
+  demoToggle.checked = draftDemo;
+
+  titleInput.addEventListener('input', function () {
+    draftTitle = titleInput.value.trim();
+    autoSave();
+  });
+
+  demoToggle.addEventListener('change', function () {
+    draftDemo = demoToggle.checked;
+    autoSave();
+  });
+
+  // plus de bouton « Enregistrer » : la saisie est conservée au fil de l'eau,
+  // et « Lancer la partie » enregistre avant de démarrer
+  function autoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(save, 400);
+  }
+
+  durationInput.value = duration;
+
+  // on retient la saisie telle quelle, on la borne quand le champ est quitté
+  durationInput.addEventListener('input', function () {
+    var seconds = Math.round(Number(durationInput.value));
+    if (isFinite(seconds) && seconds >= MIN_DURATION && seconds <= MAX_DURATION) {
+      duration = seconds;
+      editorMsg.textContent = '';
+    }
+  });
+
+  durationInput.addEventListener('change', function () {
+    duration = clampDuration(durationInput.value);
+    durationInput.value = duration;
+    autoSave();
+  });
+
+  // sans stockage, rien ne survit à la fermeture : on le dit une fois, calmement
+  if (!canStore) {
+    document.querySelector('.editor-hint').textContent =
+      'Coche la bonne réponse de chaque question. Tes questions restent le temps de la session.';
+  }
+
+  function renderEditor() {
+    editorMsg.textContent = '';
+    qList.innerHTML = '';
+
+    draft.forEach(function (item, qi) {
+      var card = document.createElement('div');
+      card.className = 'q-card';
+
+      var options = item.a.map(function (answer, ai) {
+        return '' +
+          '<div class="opt">' +
+            shapeSvg(ai) +
+            '<input class="field" type="text" value="' + escapeAttr(answer) + '"' +
+              ' data-q="' + qi + '" data-a="' + ai + '" placeholder="Réponse ' + (ai + 1) + '">' +
+            '<label class="opt-correct">' +
+              '<input type="radio" name="correct-' + qi + '" value="' + ai + '"' +
+                (item.correct === ai ? ' checked' : '') + '>' +
+              '<span class="opt-box"></span> bonne' +
+            '</label>' +
+          '</div>';
+      }).join('');
+
+      card.innerHTML = '' +
+        '<div class="q-card-head">' +
+          '<span class="q-num">Question ' + (qi + 1) + '</span>' +
+          '<button type="button" class="btn btn--small" data-remove="' + qi + '">Supprimer</button>' +
+        '</div>' +
+        '<input class="field field--question" type="text" value="' + escapeAttr(item.q) + '"' +
+          ' data-q="' + qi + '" placeholder="Saisis ta question">' +
+        '<div class="opt-grid">' + options + '</div>';
+
+      qList.appendChild(card);
+    });
+  }
+
+  function escapeAttr(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  // saisie du texte : question ou réponse
+  qList.addEventListener('input', function (event) {
+    var field = event.target;
+    if (!field.classList.contains('field')) return;
+    var qi = Number(field.dataset.q);
+    if (field.dataset.a === undefined) {
+      draft[qi].q = field.value;
+    } else {
+      draft[qi].a[Number(field.dataset.a)] = field.value;
+    }
+    editorMsg.textContent = '';
+    autoSave();
+  });
+
+  // choix de la bonne réponse
+  qList.addEventListener('change', function (event) {
+    if (event.target.type !== 'radio') return;
+    var qi = Number(event.target.name.split('-')[1]);
+    draft[qi].correct = Number(event.target.value);
+    autoSave();
+  });
+
+  // suppression d'une question
+  qList.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-remove]');
+    if (!button) return;
+    if (draft.length === 1) {
+      editorMsg.textContent = 'Il faut garder au moins une question.';
+      return;
+    }
+    draft.splice(Number(button.dataset.remove), 1);
+    renderEditor();
+    autoSave();
+  });
+
+  document.getElementById('add-question').addEventListener('click', function () {
+    draft.push({ q: '', a: ['', '', '', ''], correct: 0 });
+    renderEditor();
+    autoSave();
+    var fields = qList.querySelectorAll('.field--question');
+    fields[fields.length - 1].focus();
+  });
+
+  /* Import : on accepte le format exporté ({duration, questions}) et, par tolérance,
+     un simple tableau de questions. Tout le reste est refusé avec une raison. */
+  function normalizeQuiz(raw) {
+    var questions = Array.isArray(raw) ? raw : (raw && raw.questions);
+    if (!Array.isArray(questions) || !questions.length) return null;
+
+    var clean = [];
+    for (var i = 0; i < questions.length; i++) {
+      var item = questions[i];
+      if (!item || typeof item.q !== 'string' || !Array.isArray(item.a) || item.a.length !== 4) return null;
+      var answers = item.a.map(function (answer) { return String(answer); });
+      var correct = Number(item.correct);
+      if (!isFinite(correct) || correct < 0 || correct > 3) return null;
+      clean.push({ q: item.q, a: answers, correct: Math.round(correct) });
+    }
+
+    return {
+      questions: clean,
+      duration: (raw && raw.duration !== undefined) ? clampDuration(raw.duration) : duration,
+      title: (raw && typeof raw.title === 'string') ? raw.title.slice(0, 60) : draftTitle,
+      demo: (raw && typeof raw.demo === 'boolean') ? raw.demo : draftDemo
+    };
+  }
+
+  var importInput = document.getElementById('import-file');
+
+  document.getElementById('import-quiz').addEventListener('click', function () {
+    importInput.click();
+  });
+
+  importInput.addEventListener('change', function () {
+    var file = importInput.files && importInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+
+    reader.onload = function () {
+      var parsed = null;
+      try {
+        parsed = JSON.parse(String(reader.result));
+      } catch (e) {
+        editorMsg.textContent = 'Ce fichier n’est pas du JSON valide.';
+        return;
+      }
+
+      var loaded = normalizeQuiz(parsed);
+      if (!loaded) {
+        editorMsg.textContent = 'Fichier lu, mais ce n’est pas un quiz exporté : il faut une liste ' +
+          'de questions avec quatre réponses et l’index de la bonne.';
+        return;
+      }
+
+      draft = loaded.questions;
+      duration = loaded.duration;
+      draftTitle = loaded.title;
+      draftDemo = loaded.demo;
+      durationInput.value = duration;
+      titleInput.value = draftTitle;
+      demoToggle.checked = draftDemo;
+      renderEditor();
+      save();
+      var n = loaded.questions.length;
+      editorMsg.textContent = n + ' question' + (n > 1 ? 's' : '') + ' importée' + (n > 1 ? 's' : '') +
+        ' depuis ' + file.name + ' — les questions précédentes ont été remplacées.';
+    };
+
+    reader.onerror = function () {
+      editorMsg.textContent = 'Le fichier n’a pas pu être lu.';
+    };
+
+    reader.readAsText(file);
+    importInput.value = '';   // pour pouvoir réimporter le même fichier
+  });
+
+  /* Export du quiz : même format que le document `quiz/current` de la base,
+     pour qu'un fichier exporté soit relisible tel quel. */
+  function quizFileName() {
+    var stamp = new Date().toISOString().slice(0, 10);
+    return 'main-levee-' + stamp + '.json';
+  }
+
+  document.getElementById('export-quiz').addEventListener('click', function () {
+    var content = JSON.stringify({
+      title: draftTitle, duration: duration, demo: draftDemo, questions: draft
+    }, null, 2);
+    var name = quizFileName();
+
+    if (cloud.downloads) {
+      editorMsg.textContent = 'Téléchargement proposé…';
+      cloud.downloads.save({ filename: name, data: content }).then(function () {
+        editorMsg.textContent = 'Quiz exporté dans ' + name + '.';
+      }, function (error) {
+        var code = (error && error.code) || '';
+        editorMsg.textContent = (code === 'declined')
+          ? 'Export annulé.'
+          : 'Export impossible' + (code ? ' (' + code + ')' : '') + '.';
+      });
+      return;
+    }
+
+    // hors artifact (fichier local) : téléchargement classique par le navigateur
+    try {
+      var url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.click();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      editorMsg.textContent = 'Quiz exporté dans ' + name + '.';
+    } catch (e) {
+      editorMsg.textContent = 'Ce navigateur n’autorise pas le téléchargement depuis la page.';
+    }
+  });
+
+  document.getElementById('start-quiz').addEventListener('click', function () {
+    var incomplete = draft.some(function (item) {
+      return !item.q.trim() || item.a.some(function (answer) { return !answer.trim(); });
+    });
+    if (incomplete) {
+      editorMsg.textContent = 'Complète toutes les questions et leurs quatre réponses.';
+      return;
+    }
+    save();
+    quiz = draft;          // c'est le brouillon qui part en partie
+    quizTitle = draftTitle;
+    quizDemo = draftDemo;
+    // en ligne, l'organisateur ouvre un salon ; sinon il joue en solo comme avant
+    if (cloud.db && cloud.canEdit) {
+      openLobby();
+    } else {
+      joining = false;
+      askName();
+    }
+  });
+
+  /* ---------------- Mode participant : identité ---------------- */
+  var player = '';
+  var playerIcon = 0;
+  var nameForm = document.getElementById('name-form');
+  var nameInput = document.getElementById('player-name');
+  var nameMsg = document.getElementById('name-msg');
+  var avatarGrid = document.getElementById('avatar-grid');
+
+  avatarGrid.innerHTML = AVATARS.map(function (_, i) {
+    return '<button type="button" class="avatar-btn" role="radio" aria-checked="false"' +
+      ' data-icon="' + i + '" aria-label="Icône ' + (i + 1) + '">' + avatarSvg(i) + '</button>';
+  }).join('');
+
+  function paintAvatarChoice() {
+    [].forEach.call(avatarGrid.children, function (button, i) {
+      button.setAttribute('aria-checked', i === playerIcon ? 'true' : 'false');
+    });
+  }
+
+  avatarGrid.addEventListener('click', function (event) {
+    var button = event.target.closest('.avatar-btn');
+    if (!button) return;
+    playerIcon = Number(button.dataset.icon);
+    paintAvatarChoice();
+  });
+
+  function askName() {
+    nameMsg.textContent = '';
+    // on repropose le dernier nom et la dernière icône utilisés sur ce navigateur
+    if (!nameInput.value) {
+      try {
+        nameInput.value = localStorage.getItem(NAME_KEY) || '';
+        var savedIcon = localStorage.getItem(ICON_KEY);
+        if (savedIcon !== null) playerIcon = Math.min(Math.max(Number(savedIcon) || 0, 0), AVATARS.length - 1);
+      } catch (e) { /* stockage indisponible */ }
+    }
+    paintAvatarChoice();
+    show('name');
+    nameInput.focus();
+    nameInput.select();
+  }
+
+  nameForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var value = nameInput.value.trim();
+    if (!value) {
+      nameMsg.textContent = 'Il me faut un nom pour afficher ton score.';
+      nameInput.focus();
+      return;
+    }
+    player = value;
+    try {
+      localStorage.setItem(NAME_KEY, player);
+      localStorage.setItem(ICON_KEY, String(playerIcon));
+    } catch (e) { /* stockage indisponible : le choix vaut pour la session */ }
+
+    if (joining && liveState) {
+      joinGame();
+    } else {
+      startGame();
+    }
+  });
+
+  /* ---------------- Mode participant : partie ---------------- */
+  var current = 0;
+  var score = 0;
+  var rights = 0;   // bonnes réponses, que le score ne reflète plus directement
+
+  // deux écrans affichent le décompte : la question du joueur et le suivi de l'organisateur
+  var timerEls = [document.getElementById('timer'), document.getElementById('host-timer')];
+  var timerValues = timerEls.map(function (el) { return el.querySelector('.timer-value'); });
+  var timerArcs = timerEls.map(function (el) { return el.querySelector('.timer-arc'); });
+
+  /* Anneau de progression. Il est peint à partir des horodatages, pas d'un compteur :
+     il reste donc juste même si l'onglet a été ralenti ou mis en arrière-plan. */
+  var RING = 2 * Math.PI * 45;
+  var ringFrame = null;
+  var phaseEndsAt = 0;
+  var phaseLength = 0;
+  var calmMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function paintRing() {
+    var left = phaseLength ? (phaseEndsAt - Date.now()) / phaseLength : 0;
+    left = Math.max(Math.min(left, 1), 0);
+    timerArcs.forEach(function (arc) { arc.style.strokeDashoffset = RING * (1 - left); });
+    return left;
+  }
+
+  function startRing(endsAt, length) {
+    stopRing();
+    phaseEndsAt = endsAt;
+    phaseLength = length;
+    if (calmMotion) {         // mouvement réduit : l'anneau avance par secondes, avec le chiffre
+      paintRing();
+      return;
+    }
+    var step = function () {
+      if (paintRing() > 0) ringFrame = requestAnimationFrame(step);
+      else ringFrame = null;
+    };
+    step();
+  }
+
+  function stopRing() {
+    if (ringFrame) {
+      cancelAnimationFrame(ringFrame);
+      ringFrame = null;
+    }
+  }
+  var ticker = null;
+  var remaining = duration;
+  var onTimerEnd = null;
+  var readTimer = null;
+  var questionStartedAt = 0;   // moment où les réponses s'affichent, pour mesurer la rapidité
+  var lastAward = 0;           // points gagnés sur la dernière réponse
+
+  /* Barème : une bonne réponse rapporte entre la moitié et la totalité des points,
+     selon le temps mis. Répondre à la dernière seconde vaut donc toujours quelque chose. */
+  function speedPoints() {
+    var elapsed = (Date.now() - questionStartedAt) / 1000;
+    var left = Math.min(Math.max(1 - elapsed / duration, 0), 1);
+    return Math.round(POINTS * (0.5 + 0.5 * left) / 10) * 10;
+  }
+
+  var questionText = document.getElementById('question-text');
+  var questionCounter = document.getElementById('question-counter');
+  var answersBox = document.getElementById('answers');
+
+  var mark = document.getElementById('verdict-mark');
+  var resultTitle = document.getElementById('result-title');
+  var resultText = document.getElementById('result-text');
+  var resultRecap = document.getElementById('result-recap');
+  var nextButton = document.getElementById('next-question');
+
+  /* ---------------- Minuteur ---------------- */
+  /* Temps de lecture : la question reste seule à l'écran quelques secondes, puis les
+     réponses apparaissent et le chrono démarre. Tout est calé sur `startedAt`, donc
+     l'organisateur et les participants basculent au même moment. */
+  function clearReadTimer() {
+    if (readTimer) {
+      clearInterval(readTimer);
+      readTimer = null;
+    }
+  }
+
+  function paintReading(left, label) {
+    timerValues.forEach(function (el) { el.textContent = left; });
+    timerEls.forEach(function (el) {
+      el.classList.add('timer--reading');
+      el.classList.remove('timer--urgent');
+    });
+    if (calmMotion) paintRing();
+    label.textContent = '';   // le décompte pointillé suffit à dire qu'on lit
+  }
+
+  function runQuestionTimeline(startedAt, label, showAnswers, onEnd) {
+    clearReadTimer();
+    var answersAt = (startedAt || Date.now()) + READ_TIME * 1000;
+    questionStartedAt = answersAt;   // la rapidité se mesure à partir de l'affichage des réponses
+
+    var wait = answersAt - Date.now();
+    if (wait <= 0) {
+      showAnswers();
+      startTimer(answersAt, onEnd);
+      return;
+    }
+
+    var left = Math.ceil(wait / 1000);
+    startRing(answersAt, READ_TIME * 1000);
+    paintReading(left, label);
+    readTimer = setInterval(function () {
+      left -= 1;
+      if (left > 0) {
+        paintReading(left, label);
+        return;
+      }
+      clearReadTimer();
+      showAnswers();
+      startTimer(answersAt, onEnd);
+    }, 1000);
+  }
+
+  // startedAt (horodatage partagé) garde tout le monde à peu près synchrone
+  function startTimer(startedAt, onEnd) {
+    stopTimer();
+    timerEls.forEach(function (el) { el.classList.remove('timer--reading'); });
+    onTimerEnd = onEnd || function () { revealResult(null); };
+    var begin = startedAt || Date.now();
+    var elapsed = Math.floor((Date.now() - begin) / 1000);
+    remaining = Math.max(duration - elapsed, 1);
+    startRing(begin + duration * 1000, duration * 1000);
+    paintTimer();
+    ticker = setInterval(function () {
+      remaining -= 1;
+      paintTimer();
+      if (remaining <= 0) {
+        var end = onTimerEnd;
+        stopTimer();
+        end();
+      }
+    }, 1000);
+  }
+
+  function stopTimer() {
+    clearReadTimer();
+    stopRing();
+    if (ticker) {
+      clearInterval(ticker);
+      ticker = null;
+    }
+    timerEls.forEach(function (el) {
+      el.classList.remove('timer--urgent');
+      el.classList.remove('timer--reading');
+    });
+  }
+
+  function paintTimer() {
+    var urgent = (remaining <= URGENT_AT && remaining > 0);
+    timerValues.forEach(function (el) { el.textContent = Math.max(remaining, 0); });
+    timerEls.forEach(function (el) { el.classList.toggle('timer--urgent', urgent); });
+    if (calmMotion) paintRing();
+  }
+
+  // liste déroulante du badge : qui joue, avec son icône et son score
+  function renderPlayersPopover(players) {
+    badgeMenu.setAttribute('data-pop', 'on');
+    badgePop.innerHTML = '';
+
+    var title = document.createElement('p');
+    title.className = 'pop-title';
+    title.textContent = 'Joueurs de la partie';
+    badgePop.appendChild(title);
+
+    if (!players.length) {
+      var empty = document.createElement('p');
+      empty.className = 'pop-empty';
+      empty.textContent = 'Personne n’a encore rejoint.';
+      badgePop.appendChild(empty);
+      return;
+    }
+
+    players.slice().sort(function (a, b) { return b.score - a.score; }).forEach(function (p) {
+      var row = document.createElement('div');
+      row.className = 'pop-row';
+      row.innerHTML = avatarSvg(p.icon);
+
+      var name = document.createElement('span');
+      name.className = 'pop-name';
+      name.textContent = p.name;   // saisi par le joueur : jamais interprété comme du HTML
+
+      var points = document.createElement('span');
+      points.className = 'pop-score';
+      points.textContent = p.score + ' pts';
+
+      row.appendChild(name);
+      row.appendChild(points);
+      badgePop.appendChild(row);
+    });
+  }
+
+  function updateScoreBadge() {
+    if (isHost) {
+      // l'organisateur ne joue pas : son badge compte les participants et les déroule au survol
+      var players = currentPlayers();
+      badgeRight.textContent = players.length + ' joueur' + (players.length > 1 ? 's' : '');
+      renderPlayersPopover(players);
+      return;
+    }
+
+    badgeMenu.setAttribute('data-pop', 'off');
+    badgePop.innerHTML = '';
+    // l'icône accompagne le nom partout où il s'affiche
+    badgeRight.innerHTML = avatarSvg(playerIcon);
+    badgeRight.appendChild(document.createTextNode(' ' + player + ' · ' + score + ' pts'));
+  }
+
+  function startGame() {
+    // sans stockage, le brouillon en mémoire est la seule version à jour
+    if (canStore) {
+      draft = load();
+      duration = loadDuration();
+      draftTitle = loadTitle();
+      draftDemo = loadDemoFlag();
+    }
+    quiz = draft;
+    if (!myGameId) quizTitle = draftTitle;   // en solo, c'est le titre du brouillon
+    current = 0;
+    score = 0;
+    rights = 0;
+    lastAward = 0;
+    renderQuestion();
+  }
+
+  // clickable pour le joueur, simple affichage pour l'écran de suivi
+  function answersHtml(item, clickable) {
+    return item.a.map(function (answer, ai) {
+      var open = clickable
+        ? '<button type="button" class="answer ' + HATCH[ai] + '" data-index="' + ai + '">'
+        : '<div class="answer ' + HATCH[ai] + '">';
+      return open +
+        shapeSvg(ai) +
+        '<span class="label">' + escapeAttr(answer) + '</span>' +
+        (clickable ? '</button>' : '</div>');
+    }).join('');
+  }
+
+  function questionCaption() {
+    return isDemo()
+      ? 'Entraînement : cette question ne compte pas.'
+      : quiz.length + ' question' + (quiz.length > 1 ? 's' : '') + ' au total';
+  }
+
+  function renderQuestion(startedAt, onEnd) {
+    var item = (myGameId && isDemo()) ? DEMO_QUESTION : quiz[current];
+    questionText.textContent = item.q;
+    questionCounter.textContent = questionCaption();
+
+    badgeLeft.textContent = (myGameId && isDemo())
+      ? 'Question test' : 'Question ' + (current + 1) + ' / ' + quiz.length;
+    updateScoreBadge();
+
+    answersBox.innerHTML = answersHtml(item, true);
+    answersBox.hidden = true;   // la question se lit d'abord
+
+    show('question');
+    runQuestionTimeline(startedAt, questionCounter, function () {
+      answersBox.hidden = false;
+      questionCounter.textContent = questionCaption();
+    }, onEnd);
+  }
+
+  answersBox.addEventListener('click', function (event) {
+    var button = event.target.closest('.answer');
+    if (!button) return;
+    stopTimer();
+    var chosen = Number(button.dataset.index);
+
+    // en ligne, on enregistre et on attend que l'organisateur révèle
+    if (myGameId) {
+      myChoice = chosen;
+
+      if (isDemo()) {
+        lastAward = 0;   // l'entraînement ne rapporte rien et ne coûte rien
+        writeMyProgress();
+        showWaiting('C’est exactement ça', 'Tu sais répondre. Le quiz démarre juste après.');
+        return;
+      }
+
+      var goodAnswer = (chosen === quiz[current].correct);
+      lastAward = goodAnswer ? speedPoints() : 0;
+      if (goodAnswer) rights += 1;
+      score += lastAward;
+      writeMyProgress();
+      showWaiting('Réponse envoyée', 'En attente des autres participants…');
+      return;
+    }
+
+    revealResult(chosen);
+  });
+
+  // les quatre options, avec la bonne réponse et celle du joueur mises en avant
+  function renderRecap(item, chosen) {
+    return item.a.map(function (answer, ai) {
+      var isRight = (ai === item.correct);
+      var isMine = (ai === chosen);
+      var tags = '';
+
+      if (isRight) tags += '<span class="tag tag--right">' + ICON_CHECK + 'Bonne réponse</span>';
+      if (isMine) tags += '<span class="tag tag--mine">' + ICON_HAND + 'Ta réponse</span>';
+
+      return '' +
+        '<div class="recap-row' + (isRight || isMine ? ' recap-row--marked' : '') + '">' +
+          shapeSvg(ai) +
+          '<span class="recap-label">' + escapeAttr(answer) + '</span>' +
+          (tags ? '<span class="tags">' + tags + '</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  // chosen vaut null quand le temps est écoulé sans réponse ;
+  // online = le score a déjà été compté à la réponse, l'organisateur pilote la suite
+  function revealResult(chosen, online) {
+    var demo = (online && isDemo());
+    var item = demo ? DEMO_QUESTION : quiz[current];
+    var isCorrect = (chosen !== null && chosen === item.correct);
+
+    if (!online) {
+      lastAward = isCorrect ? speedPoints() : 0;
+      if (isCorrect) rights += 1;
+      score += lastAward;
+    }
+
+    mark.innerHTML = isCorrect ? MARK_OK : MARK_KO;
+
+    if (demo) {
+      // entraînement : on explique le geste, on ne compte rien
+      resultTitle.textContent = isCorrect ? 'Voilà, c’est le geste !' : 'Pas grave, c’était un essai.';
+      resultText.textContent = chosen === null
+        ? 'Touche un bloc avant la fin du chrono. Cette question ne comptait pas : le quiz commence.'
+        : 'Cette question ne comptait pas. Le quiz commence maintenant, chaque seconde gagnée rapporte des points.';
+    } else if (isCorrect) {
+      resultTitle.textContent = 'Bravo, c’est la bonne réponse !';
+      resultText.innerHTML = 'Tu marques <strong>+' + lastAward + ' points</strong> sur cette question.';
+    } else if (chosen === null) {
+      resultTitle.textContent = 'Temps écoulé !';
+      resultText.textContent = 'Personne n’a répondu à temps. Aucun point sur cette question.';
+    } else {
+      resultTitle.textContent = 'Raté, ce n’est pas ça.';
+      resultText.textContent = 'Aucun point sur cette question.';
+    }
+
+    resultRecap.innerHTML = renderRecap(item, chosen);
+
+    updateScoreBadge();
+    nextButton.hidden = !!online;   // en ligne, c'est l'organisateur qui enchaîne
+    nextButton.textContent = (current + 1 < quiz.length) ? 'Question suivante →' : 'Voir mon score →';
+
+    show('result');
+  }
+
+  nextButton.addEventListener('click', function () {
+    current += 1;
+    if (current < quiz.length) {
+      renderQuestion();
+    } else {
+      showScore();
+    }
+  });
+
+  // félicitation du vainqueur, tirée une fois par partie
+  var finalQuip = document.getElementById('final-quip');
+  var finalQuipKey = '';
+
+  function paintFinalQuip() {
+    var players = currentPlayers();
+    var key = (liveState && liveState.gameId) || '';
+    if (!players.length || !key) {
+      finalQuip.hidden = true;
+      return;
+    }
+    if (finalQuipKey !== key) {
+      var best = players.slice().sort(function (a, b) { return b.score - a.score; })[0];
+      finalQuip.textContent = pickQuip(QUIPS_WINNER, best.name);
+      finalQuipKey = key;
+    }
+    finalQuip.hidden = false;
+  }
+
+  // 1er, 2ème, 3ème… ; les ex aequo partagent la même place
+  function rankLabel(rank) {
+    return rank === 1 ? '1er' : rank + 'ème';
+  }
+
+  function showScore() {
+    var max = quiz.length * POINTS;
+    var title = document.getElementById('final-title');
+    var big = document.getElementById('final-score');
+    var text = document.getElementById('final-text');
+    var replayButton = document.getElementById('replay');
+
+    var stopped = !!(liveState && liveState.stopped);
+
+    // le quiz joué est rappelé sous le titre de l'écran
+    var finalQuizTitle = document.getElementById('final-quiz-title');
+    finalQuizTitle.textContent = quizTitle;
+    finalQuizTitle.hidden = !quizTitle;
+
+    // en solo il n'y a pas de classement : l'écran annonce ce qu'il montre vraiment
+    document.getElementById('final-heading').textContent =
+      (isHost || myGameId) ? 'Classement final' : 'Ton résultat';
+
+    if (isHost) {
+      // l'organisateur n'a pas joué : le classement occupe tout l'écran
+      title.textContent = stopped ? 'Partie arrêtée' : 'Partie terminée';
+      big.hidden = true;
+      text.textContent = quiz.length + ' question' + (quiz.length > 1 ? 's' : '') + ' posée' +
+        (quiz.length > 1 ? 's' : '') + '.';
+      replayButton.hidden = true;
+      paintFinalQuip();
+      renderBoard();
+    } else {
+      title.textContent = (stopped && myGameId) ? 'Partie arrêtée par l’organisateur' : 'Partie terminée';
+      big.hidden = false;
+      big.classList.remove('big-score--text');
+
+      var goodAnswers = '<strong>' + rights + '</strong> bonne' + (rights > 1 ? 's' : '') +
+        ' réponse' + (rights > 1 ? 's' : '') + ' sur ' + quiz.length;
+
+      if (myGameId) {
+        // en partie, la place compte plus que le total de points
+        var others = currentPlayers();
+        var mine = others.filter(function (p) { return p.id === cloud.uid; })[0];
+        var myScore = mine ? mine.score : score;
+        var ahead = others.filter(function (p) { return p.score > myScore; }).length;
+        var tied = others.filter(function (p) {
+          return p.score === myScore && p.id !== cloud.uid;
+        }).length;
+
+        big.textContent = rankLabel(ahead + 1);
+        text.innerHTML = 'sur ' + others.length + ' joueur' + (others.length > 1 ? 's' : '') +
+          (tied ? ', à égalité avec ' + tied + ' autre' + (tied > 1 ? 's' : '') : '') +
+          ' — ' + myScore + ' pts, ' + goodAnswers + '.';
+        paintFinalQuip();
+        renderBoard();
+      } else {
+        finalQuip.hidden = true;   // en solo, personne à féliciter
+        big.textContent = score + ' / ' + max + ' pts';
+        text.innerHTML = goodAnswers + '.';
+        document.getElementById('final-board').hidden = true;
+      }
+
+      replayButton.hidden = !!myGameId;   // en ligne, on ne rejoue pas seul dans son coin
+    }
+
+    updateScoreBadge();
+    show('score');
+    badgeLeft.hidden = true;   // l'écran dit déjà que la partie est finie
+  }
+
+  document.getElementById('replay').addEventListener('click', startGame);
+  document.getElementById('back-home').addEventListener('click', function () {
+    leaveGame();
+    show('home');
+  });
+})();
+</script>
+
+</body>
+</html>
