@@ -2202,17 +2202,10 @@
     show('lobby');
 
     var gameId = 'g' + Date.now();
-    // la partie précédente ne doit pas compter dans le salon
-    cloud.db.collection('players').get().then(function (snap) {
-      return Promise.all(snap.docs.map(function (doc) {
-        return cloud.db.doc('players/' + doc.id).delete();
-      }));
-    }).catch(function () { /* rien à purger */ })
-      .then(function () {
-        return cloud.db.doc('quiz/current').set({
-          title: quizTitle, questions: quiz, duration: duration, demo: quizDemo
-        });
-      })
+    // les joueurs de la partie précédente restent en base : le nouveau gameId les écarte
+    cloud.db.doc('quiz/current').set({
+      title: quizTitle, questions: quiz, duration: duration, demo: quizDemo
+    })
       .then(function () {
         return cloud.db.doc('game/state').set({
           gameId: gameId, phase: 'lobby', index: -1, startedAt: 0
