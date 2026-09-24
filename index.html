@@ -1604,8 +1604,7 @@
   <main class="view" id="view-lobby" hidden>
     <div class="card">
       <h1 class="card-title">Salon d&rsquo;attente</h1>
-      <p class="card-text">Partage ce lien, les participants apparaissent ici au fur et à mesure.<br>
-        Ils doivent avoir l&rsquo;accès <strong>Can interact</strong> (menu Share) pour pouvoir répondre.</p>
+      <p class="card-text">Partage ce lien, les participants apparaissent ici au fur et à mesure.</p>
 
       <div class="share">
         <input class="share-link" id="share-link" type="text" readonly>
@@ -2060,7 +2059,7 @@
     appId: '1:722104345618:web:9a3f3958c380e97a4224cb'
   };
 
-  var cloud = { db: null, uid: null, canEdit: false, canWrite: null, downloads: null };
+  var cloud = { db: null, uid: null };
   var liveState = null;     // dernier `game/state` connu
   var livePlayers = [];     // joueurs de la partie en cours
   var unsubState = null;
@@ -2096,8 +2095,6 @@
       if (!user) return;
       cloud.db = firebase.firestore();
       cloud.uid = user.uid;
-      cloud.canEdit = true;
-      cloud.canWrite = true;
       watchGame();
     });
     authReady.then(function () {
@@ -2542,10 +2539,6 @@
         'Réessaie dans un instant.';
       return false;
     }
-    if (cloud.canWrite === false) {
-      nameMsg.textContent = 'Écriture refusée par la base. Réessaie dans un instant.';
-      return false;
-    }
     useCloudQuiz();   // on joue le quiz de l'organisateur, pas son propre brouillon
     myGameId = liveState.gameId;
     myChoice = null;
@@ -2909,20 +2902,6 @@
     }, null, 2);
     var name = quizFileName();
 
-    if (cloud.downloads) {
-      editorMsg.textContent = 'Téléchargement proposé…';
-      cloud.downloads.save({ filename: name, data: content }).then(function () {
-        editorMsg.textContent = 'Quiz exporté dans ' + name + '.';
-      }, function (error) {
-        var code = (error && error.code) || '';
-        editorMsg.textContent = (code === 'declined')
-          ? 'Export annulé.'
-          : 'Export impossible' + (code ? ' (' + code + ')' : '') + '.';
-      });
-      return;
-    }
-
-    // hors artifact (fichier local) : téléchargement classique par le navigateur
     try {
       var url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
       var link = document.createElement('a');
@@ -2948,7 +2927,7 @@
     quiz = draft;          // c'est le brouillon qui part en partie
     quizTitle = draftTitle;
     quizDemo = draftDemo;
-    if (!cloud.db || !cloud.canEdit) {
+    if (!cloud.db) {
       editorMsg.textContent = 'Connexion à la base pas encore établie. Réessaie dans un instant.';
       return;
     }
