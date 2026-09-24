@@ -8,8 +8,7 @@
       "**/node_modules/**",
       "**/*.log",
       "DONNEES.md",
-      "EMULATEUR.md",
-      "db-export/**"
+      "EMULATEUR.md"
     ]
   },
   "firestore": {

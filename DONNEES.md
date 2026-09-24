@@ -18,7 +18,8 @@ Conséquences pratiques :
   (donc n'importe qui ouvrant la page) peut ouvrir un salon. Adapté à un usage entre personnes de
   confiance — voir `firestore.rules` pour durcir si besoin.
 
-Front hébergé sur GitHub Pages, base sur Firebase (projet Google Cloud séparé).
+Front hébergé sur Firebase Hosting (<https://main-levee.web.app>), redéployé par GitHub Actions à
+chaque push sur `main` ; base sur Firestore, dans le même projet Firebase `main-levee`.
 
 ## Tester en local, sans toucher à la base réelle
 
@@ -88,7 +89,7 @@ donc **pas** dans cette base.
 
 Écrit uniquement par l'organisateur.
 
-### `players/<id du viewer>` — un document par joueur
+### `players/<uid>` — un document par joueur
 
 ```json
 {
@@ -97,7 +98,8 @@ donc **pas** dans cette base.
   "icon": 4,
   "score": 2680,
   "answeredIndex": 2,
-  "choice": 0
+  "choice": 0,
+  "demoAnswered": true
 }
 ```
 
@@ -111,6 +113,8 @@ donc **pas** dans cette base.
   vaut 0.
 - `answeredIndex` : dernière question répondue ; -1 tant que le joueur n'a pas répondu.
 - `choice` : index de la réponse cochée dans `a`, ou -1.
+- `demoAnswered` : `true` une fois la question test répondue ; elle a son propre marqueur car elle
+  ne fait pas avancer `answeredIndex`.
 
 Chaque participant n'écrit que son propre document (`joinGame` et `writeMyProgress`).
 
@@ -123,38 +127,29 @@ Déclarées dans [`firestore.rules`](firestore.rules) :
 - `players/{id}` : lecture pour tout visiteur authentifié, écriture réservée au propriétaire du
   document (`request.auth.uid == id`), c'est-à-dire chaque joueur pour lui-même.
 
-## Refaire l'export
+## Exporter les données
 
-Depuis la console Firebase (Firestore > onglet Données), ou via le CLI :
+Deux exports possibles, selon ce qu'on veut garder.
+
+- **Le quiz seul** : bouton « Export » de l'éditeur. Il produit `main-levee-AAAA-MM-JJ.json`, avec
+  le même objet que `quiz/current`, relisible tel quel par le bouton « Import ».
+- **Toute la base** (quiz, état de la partie, joueurs et scores) : via le CLI, vers un bucket Cloud
+  Storage. Cela nécessite le plan Blaze.
 
 ```bash
-firebase firestore:export gs://<bucket-export> --collection-ids=quiz,game,players
+npx firebase-tools firestore:export gs://<bucket-export> --collection-ids=quiz,game,players
 ```
 
-(nécessite le plan Blaze pour l'export vers Cloud Storage ; pour un export ponctuel en JSON, il est
-plus simple de copier les documents à la main depuis la console).
-
-Arborescence produite dans `db-export/` (manuelle, pas générée automatiquement par la commande
-ci-dessus) :
-
-```
-db-export/
-  quiz/current.json
-  game/state.json
-  players/<id du viewer>.json      (un fichier par joueur)
-```
-
-Les exports faits depuis l'éditeur (bouton « Export ») sont nommés `main-levee-AAAA-MM-JJ.json` et
-contiennent le même objet que `quiz/current`.
+Pour relever un classement ponctuel, il est plus simple de lire les documents `players` dans la
+console Firebase (Firestore > onglet Données).
 
 C'est un **instantané**, pas une synchronisation : le contenu reflète l'état au moment de
-l'extraction et ne se met pas à jour tout seul. Refaire l'export pendant une partie donne des scores
-partiels.
+l'extraction. Un export pendant une partie donne des scores partiels.
 
 ## Ce que l'export ne contient pas
 
 - **Aucun historique de parties.** Chaque nouvelle partie écrase `quiz/current` et `game/state`, et
-  réutilise les documents joueurs (clé = identifiant du viewer). Pour garder le classement d'une
+  réutilise les documents joueurs (clé = `uid` Firebase Auth). Pour garder le classement d'une
   session, exporter avant de lancer la suivante.
 - **Aucune donnée personnelle** au-delà du prénom saisi par le joueur et de son identifiant opaque :
   ni e-mail, ni nom d'annuaire, ni horodatage de connexion.
