@@ -17,17 +17,7 @@
     --sketch-sm: 18px 6px 14px 8px / 8px 16px 6px 18px;
   }
 
-  /* thème sombre : ardoise et craie, mêmes tracés */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --paper: #17171a;
-      --ink: #f1eee7;
-      --ink-soft: #a9a49b;
-      --ink-faint: #6d6960;
-      --grain: rgba(255, 255, 255, 0.022);
-    }
-  }
-
+  /* thème sombre (sur choix explicite) : ardoise et craie, mêmes tracés */
   :root[data-theme="dark"] {
     --paper: #17171a;
     --ink: #f1eee7;
@@ -1939,7 +1929,7 @@
   var canStore = storageAvailable();
 
   /* ---------------- Thème clair / sombre ----------------
-     Sans choix explicite, la page suit le thème du lecteur ; le bouton stampe
+     Sans choix explicite, la page est en thème clair ; le bouton stampe
      data-theme sur la racine, ce que le CSS sait déjà interpréter. */
   var THEME_KEY = 'quiz-sketch-theme';
   var ICON_SUN = '<circle cx="12" cy="12" r="4.6"/><path d="M12 2.4v2.6M12 19v2.6M4.2 4.2l1.9 1.9' +
@@ -1948,12 +1938,9 @@
 
   var themeToggle = document.getElementById('theme-toggle');
   var themeIcon = document.getElementById('theme-icon');
-  var darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
   function currentTheme() {
-    var stamped = document.documentElement.getAttribute('data-theme');
-    if (stamped === 'dark' || stamped === 'light') return stamped;
-    return (darkQuery && darkQuery.matches) ? 'dark' : 'light';
+    return (document.documentElement.getAttribute('data-theme') === 'dark') ? 'dark' : 'light';
   }
 
   function paintThemeToggle() {
@@ -1969,7 +1956,7 @@
     if (savedTheme === 'dark' || savedTheme === 'light') {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
-  } catch (e) { /* stockage indisponible : on suit le thème du lecteur */ }
+  } catch (e) { /* stockage indisponible : thème clair par défaut */ }
 
   paintThemeToggle();
 
@@ -1981,11 +1968,6 @@
     } catch (e) { /* le choix vaut pour la session */ }
     paintThemeToggle();
   });
-
-  // sans choix explicite, on suit les changements de thème du système
-  if (darkQuery && darkQuery.addEventListener) {
-    darkQuery.addEventListener('change', paintThemeToggle);
-  }
 
   /* ---------------- Navigation entre vues ---------------- */
   var views = {
