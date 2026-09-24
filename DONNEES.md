@@ -3,19 +3,22 @@
 ## Où vivent les données
 
 Il n'y a **pas de back-end applicatif** dans ce projet. `index.html` contient toute l'application ;
-ce qui tient lieu de serveur est la capability `db` de la plateforme Artifact : un magasin de
-documents JSON hébergé par claude.ai, atteint à l'exécution par `claude.use("db")`.
+ce qui tient lieu de serveur est **Firebase** : Firestore pour les documents JSON, Firebase Auth
+(mode anonyme) pour identifier chaque visiteur, atteints via le SDK compat chargé en CDN dans
+`index.html` et configurés par la constante `FIREBASE_CONFIG`.
 
 Conséquences pratiques :
 
-- une base par artifact, créée à la première écriture, supprimée avec l'artifact ;
-- pas de schéma SQL, pas de fichier de base à télécharger, pas de serveur à démarrer ;
-- les règles d'accès sont déclarées au moment de la publication (paramètre `capabilities`), pas dans
-  du code ;
-- ouverte hors artifact (fichier local, aperçu `data:`), la page ne trouve pas `db` et retombe en
-  mode solo avec `localStorage`. Les données ci-dessous n'existent alors pas.
+- un seul projet Firebase pour toute l'appli, à créer une fois dans la console Firebase ;
+- les règles d'accès sont déclarées dans [`firestore.rules`](firestore.rules), à coller dans la
+  console (ou déployer via `firebase deploy --only firestore:rules`) ;
+- tant que `FIREBASE_CONFIG.apiKey` vaut `'REMPLACE_MOI'`, l'app saute Firebase et retombe en mode
+  solo avec `localStorage`. Les données ci-dessous n'existent alors pas ;
+- **choix assumé : pas de compte organisateur.** N'importe quel visiteur authentifié anonymement
+  (donc n'importe qui ouvrant la page) peut ouvrir un salon. Adapté à un usage entre personnes de
+  confiance — voir `firestore.rules` pour durcir si besoin.
 
-Artifact concerné : https://claude.ai/artifact/3tYZHT1x6SA4Eap3eLXT6L
+Front hébergé sur GitHub Pages, base sur Firebase (projet Google Cloud séparé).
 
 ## Modèle de données
 
@@ -82,8 +85,9 @@ donc **pas** dans cette base.
 }
 ```
 
-- L'id du document est l'identifiant **opaque** du viewer renvoyé par `user.id()` (forme `u_…`),
-  stable par personne et par organisation.
+- L'id du document est l'`uid` Firebase Auth du visiteur (connexion anonyme), stable pour ce
+  navigateur tant que ses données de site ne sont pas effacées — mais recréé si le visiteur revient
+  depuis un autre navigateur ou après avoir vidé ses cookies.
 - `name` : le prénom saisi sur l'écran du nom, au plus 24 caractères.
 - `icon` : index dans le tableau `AVATARS` de `index.html`, de 0 à 9.
 - `score` : cumul de la partie. Une bonne réponse vaut de 500 à 1 000 points selon la rapidité
@@ -96,25 +100,26 @@ Chaque participant n'écrit que son propre document (`joinGame` et `writeMyProgr
 
 ## Règles d'accès
 
-Déclarées à la publication :
+Déclarées dans [`firestore.rules`](firestore.rules) :
 
-- `quiz` et `game` : lecture par tous les lecteurs, écriture réservée aux éditeurs (`admin`).
-- `players` : lecture par tous, écriture réservée aux éditeurs…
-- …sauf `players/{self}`, où chaque participant écrit son propre document (niveau `interact`).
-
-Un membre de l'organisation partagé en « Can view » n'atteint pas le niveau `interact` : il peut lire
-la partie mais pas s'inscrire. Le bon réglage de partage est « Can interact ».
+- `quiz/current` et `game/state` : lecture et écriture pour tout visiteur authentifié (anonyme
+  compris) — pas de compte organisateur distinct.
+- `players/{id}` : lecture pour tout visiteur authentifié, écriture réservée au propriétaire du
+  document (`request.auth.uid == id`), c'est-à-dire chaque joueur pour lui-même.
 
 ## Refaire l'export
 
-L'export se demande depuis une session Claude Code ayant accès à l'artifact, avec l'outil
-ArtifactData (action `list`, une collection à la fois, avec un dossier de sortie). Formulation
-suffisante :
+Depuis la console Firebase (Firestore > onglet Données), ou via le CLI :
 
-> Exporte les collections `quiz`, `game` et `players` de l'artifact
-> https://claude.ai/artifact/3tYZHT1x6SA4Eap3eLXT6L dans `db-export/`
+```bash
+firebase firestore:export gs://<bucket-export> --collection-ids=quiz,game,players
+```
 
-Arborescence produite :
+(nécessite le plan Blaze pour l'export vers Cloud Storage ; pour un export ponctuel en JSON, il est
+plus simple de copier les documents à la main depuis la console).
+
+Arborescence produite dans `db-export/` (manuelle, pas générée automatiquement par la commande
+ci-dessus) :
 
 ```
 db-export/

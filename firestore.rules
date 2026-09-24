@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Règles Firestore pour Main Levée.
+// Choix assumé : pas de compte organisateur — n'importe quel visiteur authentifié
+// anonymement (donc n'importe qui ouvrant la page) peut ouvrir un salon et écrire
+// quiz/current et game/state. Adapté à un usage entre personnes de confiance,
+// pas à une exposition publique large.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /quiz/current {
+      allow read, write: if request.auth != null;
+    }
+
+    match /game/state {
+      allow read, write: if request.auth != null;
+    }
+
+    // chaque joueur ne peut écrire que son propre document (id = uid Firebase Auth)
+    match /players/{playerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == playerId;
+    }
+  }
+}

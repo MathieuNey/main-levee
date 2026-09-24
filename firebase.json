@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "**/.*",
+      "**/node_modules/**",
+      "DONNEES.md",
+      "db-export/**"
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

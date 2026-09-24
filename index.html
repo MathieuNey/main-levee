@@ -1725,6 +1725,9 @@
     </div>
   </main>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 (function () {
   'use strict';
@@ -2052,11 +2055,24 @@
     askName();
   });
 
-  /* ================= Partie en ligne (capabilities db + user) =================
+  /* ================= Partie en ligne (Firebase Auth + Firestore) =================
      La page doit rester jouable seule : tant que `cloud.db` est null, tout le
      reste du script fonctionne exactement comme avant, en solo. */
 
-  var ARTIFACT_URL = 'https://claude.ai/artifact/3tYZHT1x6SA4Eap3eLXT6L';
+  // lien à partager pour rejoindre : la page elle-même, où qu'elle soit hébergée
+  var PAGE_URL = location.href.split('#')[0].split('?')[0];
+
+  // À remplir après création du projet Firebase (console Firebase > Paramètres du
+  // projet > Vos applications > config SDK). Tant que apiKey vaut ce texte, l'app
+  // saute Firebase et reste en mode solo, comme hors artifact.
+  var FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyCYTVFFV3ud9bRL28_HR2KTfMQ7qaU5e5Q',
+    authDomain: 'main-levee.firebaseapp.com',
+    projectId: 'main-levee',
+    storageBucket: 'main-levee.firebasestorage.app',
+    messagingSenderId: '722104345618',
+    appId: '1:722104345618:web:9a3f3958c380e97a4224cb'
+  };
 
   var cloud = { db: null, uid: null, canEdit: false, canWrite: null, downloads: null };
   var liveState = null;     // dernier `game/state` connu
@@ -2075,30 +2091,19 @@
   var shownIndex = -1;      // question déjà rendue, pour ignorer les répétitions
   var shownPhase = '';
 
-  if (window.claude && typeof window.claude.use === 'function') {
-    // le bac à sable du lecteur bloque les téléchargements lancés par la page :
-    // l'export passe par la capability prévue pour ça
-    window.claude.use('downloads').then(function (downloads) {
-      cloud.downloads = downloads;
-    }, function () { /* indisponible : repli navigateur */ });
-
-    Promise.all([window.claude.use('db'), window.claude.use('user')])
-      .then(function (parts) {
-        cloud.db = parts[0];
-        var user = parts[1];
-        if (!cloud.db) return null;
-        return Promise.all([
-          user ? user.id() : null,
-          user ? user.canEdit() : false,
-          user ? user.can('data.write') : null
-        ]).then(function (who) {
-          cloud.uid = who[0];
-          cloud.canEdit = who[1];
-          cloud.canWrite = who[2];   // null = la plateforme n'a rien dit
-          watchGame();
-        });
-      })
-      .catch(function () { cloud.db = null; });
+  if (typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey !== 'REMPLACE_MOI') {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    // pas de compte organisateur : tout visiteur authentifié anonymement peut
+    // ouvrir un salon, comme choisi pour ce déploiement (groupe d'amis de confiance)
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      cloud.db = firebase.firestore();
+      cloud.uid = user.uid;
+      cloud.canEdit = true;
+      cloud.canWrite = true;
+      watchGame();
+    });
+    firebase.auth().signInAnonymously().catch(function () { cloud.db = null; });
   }
 
   // une seule souscription par chemin, ouverte au démarrage et gardée
@@ -2196,7 +2201,7 @@
   function openLobby() {
     isHost = true;
     lobbyMsg.textContent = '';
-    shareLink.value = ARTIFACT_URL;
+    shareLink.value = PAGE_URL;
     renderLobby();
     show('lobby');
 
@@ -2250,7 +2255,7 @@
     shareLink.focus();
     shareLink.select();
     try {
-      navigator.clipboard.writeText(ARTIFACT_URL).then(function () {
+      navigator.clipboard.writeText(PAGE_URL).then(function () {
         lobbyMsg.textContent = 'Lien copié.';
       }, function () {
         lobbyMsg.textContent = 'Copie refusée par le navigateur : le lien est sélectionné, fais Ctrl+C.';
@@ -2523,28 +2528,23 @@
   // dit précisément ce qui a été refusé, plutôt que de supposer
   function writeRefusedMessage(error) {
     var code = (error && error.code) || '';
-    if (code === 'invalid_argument') {
-      return 'Ton accès à ce quiz est en lecture seule. L’organisateur doit régler le partage ' +
-        'sur « Can interact » (menu Share de la page), pas « Can view ».';
+    if (code === 'permission-denied') {
+      return 'Écriture refusée par les règles de sécurité de la base Firestore.';
     }
-    if (code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') {
-      return 'Cette page n’a pas reçu l’accès aux données de la partie dans ce navigateur.';
-    }
-    if (code === 'revoked') {
-      return 'Ton accès à cette partie a été retiré en cours de route.';
+    if (code === 'unavailable' || code === 'unauthenticated') {
+      return 'Connexion à la base perdue. Vérifie ta connexion et réessaie.';
     }
     return 'Écriture impossible pour le moment' + (code ? ' (' + code + ')' : '') + '. Réessaie.';
   }
 
   function joinGame() {
     if (!cloud.uid) {
-      nameMsg.textContent = 'Impossible de rejoindre : ton compte n’est pas reconnu sur cette partie ' +
-        '(il faut être connecté à Claude dans l’organisation propriétaire du quiz).';
+      nameMsg.textContent = 'Impossible de rejoindre : la connexion à la base n’est pas encore prête. ' +
+        'Réessaie dans un instant.';
       return false;
     }
     if (cloud.canWrite === false) {
-      nameMsg.textContent = 'Ton accès à ce quiz est en lecture seule. Demande à l’organisateur de ' +
-        'régler le partage sur « Can interact » au lieu de « Can view ».';
+      nameMsg.textContent = 'Écriture refusée par la base. Réessaie dans un instant.';
       return false;
     }
     useCloudQuiz();   // on joue le quiz de l'organisateur, pas son propre brouillon
